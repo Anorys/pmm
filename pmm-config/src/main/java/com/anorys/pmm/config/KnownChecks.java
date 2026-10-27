@@ -21,6 +21,9 @@ public final class KnownChecks {
     public static final String DEPS_UNDECLARED_INTERNAL = "deps.undeclared-internal";
     public static final String GIT_BEHIND = "git.behind";
     public static final String GIT_DIRTY = "git.dirty";
+    public static final String GIT_NOT_CLONED = "git.not-cloned";
+    public static final String GIT_FETCH_FAILED = "git.fetch-failed";
+    public static final String GIT_BASE_MISSING = "git.base-missing";
     public static final String GRAPH_CYCLE = "graph.cycle";
 
     private static final Map<String, CheckSetting> DEFAULTS = new LinkedHashMap<>();
@@ -36,6 +39,9 @@ public final class KnownChecks {
         define(DEPS_UNDECLARED_INTERNAL, Severity.WARN, Map.of());
         define(GIT_BEHIND, Severity.WARN, Map.of("maxCommits", "20", "maxDays", "7"));
         define(GIT_DIRTY, Severity.INFO, Map.of());
+        define(GIT_NOT_CLONED, Severity.WARN, Map.of());
+        define(GIT_FETCH_FAILED, Severity.WARN, Map.of());
+        define(GIT_BASE_MISSING, Severity.ERROR, Map.of());
         define(GRAPH_CYCLE, Severity.ERROR, Map.of());
     }
 
