@@ -1,5 +1,6 @@
 package com.anorys.pmm.cli;
 
+import com.anorys.pmm.build.BuildRunner.Options;
 import com.anorys.pmm.cli.render.FindingsRenderer;
 import com.anorys.pmm.config.CheckSetting;
 import com.anorys.pmm.config.KnownChecks;
@@ -24,10 +25,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
 
-@Command(name = "doctor",
+@Command(name = "doctor", mixinStandardHelpOptions = true,
         description = {
                 "Runs every enabled check: dependency cycles, git status of every repository (after a fetch),",
-                "and dependencies against Nexus. The exit code sums it up for CI."})
+                "dependencies against Nexus and, with --build, the builds. The exit code sums it up for CI."})
 public class DoctorCommand implements Callable<Integer> {
 
     @ParentCommand
@@ -41,6 +42,9 @@ public class DoctorCommand implements Callable<Integer> {
 
     @Option(names = "--offline", description = "Do not query Nexus; implies --no-fetch.")
     boolean offline;
+
+    @Option(names = "--build", description = "Also build every repository (see 'pmm build').")
+    boolean build;
 
     @Option(names = "--strict", description = "Exit with code 1 when there are warnings.")
     boolean strict;
@@ -63,6 +67,14 @@ public class DoctorCommand implements Callable<Integer> {
         DependencyRun.Result deps = DependencyRun.run(config, scan.workspace(), offline, runner);
         findings.addAll(deps.findings());
 
+        BuildRun.Result builds = null;
+        if (build) {
+            Options options = new Options(config.build().effectiveParallelRepos(), config.build().cache(), offline);
+            builds = BuildRun.run(config, scan.workspace(), config.monitoredRepositories(), options, runner, out);
+            out.println();
+            findings.addAll(builds.findings());
+        }
+
         out.println("Branches" + (fetch ? "" : " (not fetched)"));
         out.print(StatusCommand.table(statuses, gitFindings));
         out.println();
@@ -70,6 +82,12 @@ public class DoctorCommand implements Callable<Integer> {
         deps.notes().forEach(note -> out.println(note));
         out.print(DependencyRun.table(deps.report().usages()));
         out.println();
+        if (builds != null) {
+            out.println("Builds");
+            out.print(BuildRun.table(builds.results(), config.workspace().root()));
+            out.println();
+            BuildRun.printBlockers(builds.blockers(), out);
+        }
         out.print(FindingsRenderer.render(findings, spec.commandLine().getColorScheme().ansi()::string));
         out.println();
         out.println(FindingsRenderer.summary(findings));

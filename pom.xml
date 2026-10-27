@@ -17,6 +17,7 @@
         <module>pmm-config</module>
         <module>pmm-maven</module>
         <module>pmm-git</module>
+        <module>pmm-build</module>
         <module>pmm-cli</module>
     </modules>
 
@@ -57,6 +58,11 @@
             <dependency>
                 <groupId>com.anorys.pmm</groupId>
                 <artifactId>pmm-git</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.anorys.pmm</groupId>
+                <artifactId>pmm-build</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

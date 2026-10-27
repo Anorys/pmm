@@ -26,6 +26,8 @@ public final class KnownChecks {
     public static final String GIT_FETCH_FAILED = "git.fetch-failed";
     public static final String GIT_BASE_MISSING = "git.base-missing";
     public static final String GRAPH_CYCLE = "graph.cycle";
+    public static final String BUILD_FAILED = "build.failed";
+    public static final String BUILD_BLOCKED = "build.blocked";
 
     private static final Map<String, CheckSetting> DEFAULTS = new LinkedHashMap<>();
     private static final Map<String, Set<String>> OPTIONS = new LinkedHashMap<>();
@@ -45,6 +47,8 @@ public final class KnownChecks {
         define(GIT_FETCH_FAILED, Severity.WARN, Map.of());
         define(GIT_BASE_MISSING, Severity.ERROR, Map.of());
         define(GRAPH_CYCLE, Severity.ERROR, Map.of());
+        define(BUILD_FAILED, Severity.ERROR, Map.of());
+        define(BUILD_BLOCKED, Severity.ERROR, Map.of());
     }
 
     private KnownChecks() {

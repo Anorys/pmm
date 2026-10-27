@@ -16,7 +16,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-@Command(name = "init",
+@Command(name = "init", mixinStandardHelpOptions = true,
         description = "Finds the git repositories with a pom.xml in a workspace folder and writes a starter pmm.yaml there.")
 public class InitCommand implements Callable<Integer> {
 

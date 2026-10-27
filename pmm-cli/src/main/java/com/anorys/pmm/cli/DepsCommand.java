@@ -14,7 +14,7 @@ import picocli.CommandLine.Spec;
 import java.io.PrintWriter;
 import java.util.concurrent.Callable;
 
-@Command(name = "deps",
+@Command(name = "deps", mixinStandardHelpOptions = true,
         description = {
                 "Checks the versions the repositories use from each other against Nexus: unreleased versions",
                 "(blockers), SNAPSHOTs, outdated releases, divergent external versions, and upstream repositories",

@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
 
-@Command(name = "graph",
+@Command(name = "graph", mixinStandardHelpOptions = true,
         description = {
                 "Reads the pom.xml files of the monitored repositories and shows how they depend on each other:",
                 "build order, the artifacts and versions each repository uses from the others, and cycles."})

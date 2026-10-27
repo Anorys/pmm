@@ -13,7 +13,7 @@ import java.io.PrintWriter;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-@Command(name = "config",
+@Command(name = "config", mixinStandardHelpOptions = true,
         description = {
                 "Validates the configuration and prints the effective values (pmm.yaml + pmm.local.yaml + defaults).",
                 "Warnings about missing repositories are printed but do not fail the command, unless --strict is given."})

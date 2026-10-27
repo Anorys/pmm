@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Callable;
 
-@Command(name = "status",
+@Command(name = "status", mixinStandardHelpOptions = true,
         description = {
                 "Fetches every monitored repository (in parallel) and shows its branch, how far it is ahead of and",
                 "behind its base branch, and its local changes. Branches that are too far behind are flagged."})
