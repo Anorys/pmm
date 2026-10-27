@@ -90,6 +90,13 @@ jobs:
           "$exe" build --config "$RUNNER_TEMP/self-ws/pmm.yaml"
           "$exe" build --config "$RUNNER_TEMP/self-ws/pmm.yaml" | tee "$RUNNER_TEMP/second-build.txt"
           grep -q "ok (cached)" "$RUNNER_TEMP/second-build.txt"
+          "$exe" sync --no-fetch --config "$RUNNER_TEMP/self-ws/pmm.yaml"
+          # The CI checkout is a detached HEAD: rebase must refuse it (exit 2), not fail to run (3).
+          set +e
+          "$exe" rebase pmm --dry-run --no-fetch --config "$RUNNER_TEMP/self-ws/pmm.yaml"
+          code=$?
+          set -e
+          test "$code" -eq 2
           set +e
           "$exe" no-such-command
           code=$?

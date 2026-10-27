@@ -73,7 +73,7 @@ class StatusCollectorTest {
             assertThat(f.checkId()).isEqualTo(KnownChecks.GIT_BEHIND);
             assertThat(f.severity()).isEqualTo(Severity.WARN);
             assertThat(f.message()).isEqualTo("3 commits behind origin/develop, oldest missing commit 10 days old");
-            assertThat(f.suggestion()).isEqualTo("rebase feature/PMM-142 onto origin/develop");
+            assertThat(f.suggestion()).isEqualTo("pmm rebase core (rebases feature/PMM-142 onto origin/develop)");
         });
     }
 
@@ -88,7 +88,7 @@ class StatusCollectorTest {
         assertThat(findings(status)).singleElement().satisfies(f -> {
             assertThat(f.severity()).isEqualTo(Severity.INFO);
             assertThat(f.message()).isEqualTo("2 commits behind origin/develop");
-            assertThat(f.suggestion()).isEqualTo("fast-forward: git merge --ff-only origin/develop");
+            assertThat(f.suggestion()).isEqualTo("fast-forward: pmm sync --fast-forward (git merge --ff-only origin/develop)");
         });
     }
 

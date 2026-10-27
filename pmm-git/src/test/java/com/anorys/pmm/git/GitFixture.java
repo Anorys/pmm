@@ -47,6 +47,7 @@ final class GitFixture {
     Path cloneAs(String name) {
         Path clone = root.resolve(name).normalize();
         gitOk(root, "clone", "--quiet", "--branch", "develop", origin.toString(), clone.toString());
+        identify(clone);
         return clone;
     }
 
@@ -94,6 +95,13 @@ final class GitFixture {
                 .env("GIT_AUTHOR_DATE", date.toString()).env("GIT_COMMITTER_DATE", date.toString())
                 .env("GIT_CONFIG_NOSYSTEM", "1")
                 .build());
+    }
+
+    /** pmm itself runs git without test variables (a rebase commits), so clones get a local identity. */
+    static void identify(Path repo) {
+        gitOk(repo, "config", "user.name", "Test");
+        gitOk(repo, "config", "user.email", "test@example.com");
+        gitOk(repo, "config", "commit.gpgsign", "false");
     }
 
     /** Like {@link #git} but fails the test when git fails. */

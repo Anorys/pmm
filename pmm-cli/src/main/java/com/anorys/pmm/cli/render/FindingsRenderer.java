@@ -12,7 +12,7 @@ import java.util.function.UnaryOperator;
  * Lists findings, most severe first:
  * <pre>
  *   warn   core     3 commits behind origin/develop
- *                   -> rebase feature/PMM-142 onto origin/develop
+ *                   -> pmm rebase core (rebases feature/PMM-142 onto origin/develop)
  * </pre>
  */
 public final class FindingsRenderer {

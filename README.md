@@ -9,9 +9,10 @@
 
 It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and macOS) built with GraalVM, so it starts instantly and needs no installed JVM.
 
-> **Status: phase 4.** The configuration, `init`, `config`, the dependency graph (`graph`), the git
+> **Status: phase 5.** The configuration, `init`, `config`, the dependency graph (`graph`), the git
 > status of every repository (`status`), the dependency checks against Nexus (`deps`), parallel builds
-> (`build`) and `doctor` work. Rebasing (`sync`, `rebase`) comes next; see the [roadmap](#roadmap).
+> (`build`), conflict prediction and safe rebasing (`sync`, `rebase`) and `doctor` work. Reports (HTML,
+> JSON, JUnit XML) come next; see the [roadmap](#roadmap).
 
 ## Quick start
 
@@ -24,6 +25,8 @@ pmm graph                 # build order, who uses what from whom (with versions)
 pmm status                # fetches every repository, then branch, ahead/behind origin/develop, local changes
 pmm deps                  # internal versions against Nexus: unreleased (blockers), SNAPSHOTs, outdated
 pmm build                 # compiles every repository, several at a time; says which one blocks which
+pmm sync                  # what each branch needs: nothing, a fast-forward, or a rebase (with predicted conflicts)
+pmm rebase billing        # rebases billing's branch onto origin/develop, safely (backup, abort on conflict)
 pmm doctor                # graph, status and deps (add --build for the builds); the command for CI
 ```
 
@@ -39,7 +42,8 @@ pmm doctor                # graph, status and deps (add --build for the builds);
 | `pmm status [--repo <name>]... [--no-fetch] [--strict]` | available | Fetches all repositories in parallel, then shows each branch, how far it is ahead of and behind its base branch, local changes and any rebase or merge in progress, with a suggestion (fast-forward or rebase) for each branch that is behind. |
 | `pmm deps [--offline] [--strict]` | available | Lists every version a repository uses from another one, with the latest release in Nexus, and reports unreleased versions (what blocks whom), SNAPSHOTs, outdated releases, external versions Nexus does not have, divergent external versions, and upstream repositories with commits since their last release. |
 | `pmm build [--repo <name>]... [-j <n>] [--no-cache] [--offline] [--strict]` | available | Runs `maven.compileGoal` in every repository, `build.parallelRepos` at a time, skips repositories whose sources did not change since their last successful build, and explains each failure: the first compilation error, or the artifact missing from Nexus and the repository that must release it. |
-| `pmm sync`, `pmm rebase <repo>` | phase 5 | Predicts conflicts with the base branch and rebases safely. |
+| `pmm sync [--repo <name>]... [--no-fetch] [--fast-forward]` | available | Fetches, then says for each repository whether its branch is up to date, can be fast-forwarded, or needs a rebase, and which files a rebase would conflict on. `--fast-forward` fast-forwards the branches that have no commit of their own and no local change. |
+| `pmm rebase <repo>... [--dry-run] [--no-fetch] [--autostash] [--keep-conflicts] [--[no-]push]` | available | Rebases the current branch onto its base branch, safely (see below), then pushes it with `--force-with-lease` if `rebase.push` or `--push` says so. |
 | `pmm doctor [--no-fetch] [--offline] [--build] [--strict]` | available | Runs every enabled check (cycles, git status after a fetch, dependencies, and the builds with `--build`); the entry point for CI. |
 
 Global options: `-c, --config <file>`, `-v, --verbose`, `-h, --help`, `-V, --version`.
@@ -173,7 +177,7 @@ Resources loaded at runtime must be listed in
 pmm-core/     severities, platform helpers, process execution (Windows-aware: mvn.cmd, PATHEXT)
 pmm-config/   pmm.yaml model, loading and merging, validation, starter template
 pmm-maven/    reads the POMs into the workspace model (no Maven run); dependency checks against Nexus
-pmm-git/      git through the git command line: fetch, status, ahead/behind, freshness, unreleased commits
+pmm-git/      git through the git command line: fetch, status, freshness, unreleased commits, safe rebase
 pmm-build/    Maven builds in parallel, failure analysis (blockers), fingerprint cache
 pmm-cli/      picocli commands, renderers, exit codes, executable jar and native image
 ```
@@ -222,6 +226,23 @@ latest release is found from `releaseTagPattern` when set, else from a tag that 
 (`v3.1.4`, `platform-core-3.1.4`), else from the oldest commit whose root `pom.xml` gained
 `<version>3.1.4</version>`. Commits whose message contains `[maven-release-plugin]` and merge commits
 are not counted. `pmm deps` uses the last fetched state; `pmm doctor` and `pmm status` fetch first.
+
+### How rebasing stays safe
+
+`pmm rebase` refuses to run on a protected branch (`rebase.protectedBranches`; `*` matches within one
+path segment, `**` across), on a detached HEAD, while a rebase or merge is in progress, or with
+uncommitted changes (unless `--autostash` or `rebase.autostash`). Before rebasing it saves the branch as
+`refs/pmm/backup/<branch>/<timestamp>` and prints the command that undoes the rebase. If the rebase
+stops on conflicts, it is aborted and the branch is left exactly as it was; `--keep-conflicts` leaves it
+in progress instead, to resolve by hand. The conflicts are predicted beforehand with `git merge-tree`
+(git 2.38 or later), which does not touch the working tree: `pmm sync` and `pmm rebase --dry-run` show
+them.
+
+Pushing a rebased branch rewrites its remote history, so it is never done silently: `rebase.push` is
+`never`, `ask` (the default: a yes/no question in a terminal, no push when there is none, as in CI) or
+`always`; `--push` and `--no-push` override it. The push uses `--force-with-lease` with the remote state
+read before the rebase: if anyone pushed to the branch since, the push is refused instead of overwriting
+their commits.
 
 ### How builds run
 
