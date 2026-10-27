@@ -1,10 +1,19 @@
 name: Release
 
-# Pushing a tag vX.Y.Z builds the native executables at version X.Y.Z and publishes them
-# as a GitHub release.
+# Pushing a tag vX.Y.Z, or running the workflow by hand with version X.Y.Z, builds the native
+# executables at version X.Y.Z and publishes them as the GitHub release vX.Y.Z (the tag is created
+# on the commit that was built when it does not exist yet).
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, without the v (for example 0.1.0)
+        required: true
+
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
 
 permissions:
   contents: read
@@ -33,7 +42,9 @@ jobs:
           cache: maven
       - name: Set the version from the tag
         shell: bash
-        run: ./mvnw -B -ntp versions:set -DnewVersion="${GITHUB_REF_NAME#v}" -DgenerateBackupPoms=false
+        run: |
+          [[ "${TAG#v}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::invalid version: ${TAG#v}"; exit 1; }
+          ./mvnw -B -ntp versions:set -DnewVersion="${TAG#v}" -DgenerateBackupPoms=false
       - name: Test and build native executable
         shell: bash
         run: ./mvnw -B -ntp -Pnative package
@@ -43,9 +54,9 @@ jobs:
           set -euo pipefail
           exe="$PWD/pmm-cli/target/${{ matrix.exe }}"
           "$exe" --version | tr -d '\r' | tee "$RUNNER_TEMP/version.txt"
-          grep -q "^pmm ${GITHUB_REF_NAME#v}\$" "$RUNNER_TEMP/version.txt"
+          grep -q "^pmm ${TAG#v}\$" "$RUNNER_TEMP/version.txt"
           mkdir -p dist
-          cp "$exe" "dist/pmm-${GITHUB_REF_NAME#v}-${{ matrix.asset }}"
+          cp "$exe" "dist/pmm-${TAG#v}-${{ matrix.asset }}"
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ runner.os }}
@@ -71,5 +82,5 @@ jobs:
           set -euo pipefail
           cd dist
           sha256sum pmm-* > SHA256SUMS
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-            --title "pmm ${GITHUB_REF_NAME#v}" --generate-notes ./*
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "pmm ${TAG#v}" --generate-notes ./*
