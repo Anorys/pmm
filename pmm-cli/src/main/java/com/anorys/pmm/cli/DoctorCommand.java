@@ -2,6 +2,11 @@ package com.anorys.pmm.cli;
 
 import com.anorys.pmm.build.BuildRunner.Options;
 import com.anorys.pmm.cli.render.FindingsRenderer;
+import com.anorys.pmm.cli.report.DoctorReport;
+import com.anorys.pmm.cli.report.HtmlReport;
+import com.anorys.pmm.cli.report.JUnitReport;
+import com.anorys.pmm.cli.report.JsonReport;
+import com.anorys.pmm.core.process.ProcessException;
 import com.anorys.pmm.config.CheckSetting;
 import com.anorys.pmm.config.KnownChecks;
 import com.anorys.pmm.config.PmmConfig;
@@ -18,7 +23,12 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
 
+import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,6 +55,16 @@ public class DoctorCommand implements Callable<Integer> {
 
     @Option(names = "--build", description = "Also build every repository (see 'pmm build').")
     boolean build;
+
+    @Option(names = "--json", paramLabel = "<file>", description = "Also write the report as JSON.")
+    Path json;
+
+    @Option(names = "--junit", paramLabel = "<file>",
+            description = "Also write the report as JUnit XML (one test per repository and category of checks).")
+    Path junit;
+
+    @Option(names = "--html", paramLabel = "<file>", description = "Also write the report as a self-contained HTML page.")
+    Path html;
 
     @Option(names = "--strict", description = "Exit with code 1 when there are warnings.")
     boolean strict;
@@ -93,7 +113,35 @@ public class DoctorCommand implements Callable<Integer> {
         out.println(FindingsRenderer.summary(findings));
         out.flush();
         ScanWarnings.print(spec.commandLine(), scan.warnings());
-        return ScanWarnings.exitCode(ExitCodes.fromFindings(findings, strict), scan.warnings(), strict);
+        int exitCode = ScanWarnings.exitCode(ExitCodes.fromFindings(findings, strict), scan.warnings(), strict);
+
+        if (json != null || junit != null || html != null) {
+            DoctorReport report = new DoctorReport(VersionProvider.version(), Instant.now(), config.workspace().root(),
+                    fetch, exitCode, statuses, deps.report().usages(),
+                    builds == null ? List.of() : builds.results(), builds == null ? List.of() : builds.blockers(),
+                    findings, deps.notes(), scan.warnings());
+            write(json, JsonReport.render(report), out);
+            write(junit, JUnitReport.render(report), out);
+            write(html, HtmlReport.render(report), out);
+            out.flush();
+        }
+        return exitCode;
+    }
+
+    private static void write(Path file, String content, PrintWriter out) {
+        if (file == null) {
+            return;
+        }
+        try {
+            Path absolute = file.toAbsolutePath();
+            if (absolute.getParent() != null) {
+                Files.createDirectories(absolute.getParent());
+            }
+            Files.writeString(absolute, content, StandardCharsets.UTF_8);
+            out.println("Report written: " + absolute);
+        } catch (IOException e) {
+            throw new ProcessException("cannot write the report " + file + ": " + e.getMessage(), e);
+        }
     }
 
     private static List<Finding> cycles(PmmConfig config, ScanResult scan) {

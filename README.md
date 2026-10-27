@@ -9,10 +9,10 @@
 
 It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and macOS) built with GraalVM, so it starts instantly and needs no installed JVM.
 
-> **Status: phase 5.** The configuration, `init`, `config`, the dependency graph (`graph`), the git
-> status of every repository (`status`), the dependency checks against Nexus (`deps`), parallel builds
-> (`build`), conflict prediction and safe rebasing (`sync`, `rebase`) and `doctor` work. Reports (HTML,
-> JSON, JUnit XML) come next; see the [roadmap](#roadmap).
+> **Status: phase 6.** Every command of the plan works: the configuration (`init`, `config`), the
+> dependency graph (`graph`), the git status (`status`), the dependency checks against Nexus (`deps`),
+> parallel builds (`build`), conflict prediction and safe rebasing (`sync`, `rebase`), and `doctor` with
+> JSON, JUnit XML and HTML reports for CI. See the [roadmap](#roadmap) for what could come next.
 
 ## Quick start
 
@@ -44,7 +44,7 @@ pmm doctor                # graph, status and deps (add --build for the builds);
 | `pmm build [--repo <name>]... [-j <n>] [--no-cache] [--offline] [--strict]` | available | Runs `maven.compileGoal` in every repository, `build.parallelRepos` at a time, skips repositories whose sources did not change since their last successful build, and explains each failure: the first compilation error, or the artifact missing from Nexus and the repository that must release it. |
 | `pmm sync [--repo <name>]... [--no-fetch] [--fast-forward]` | available | Fetches, then says for each repository whether its branch is up to date, can be fast-forwarded, or needs a rebase, and which files a rebase would conflict on. `--fast-forward` fast-forwards the branches that have no commit of their own and no local change. |
 | `pmm rebase <repo>... [--dry-run] [--no-fetch] [--autostash] [--keep-conflicts] [--[no-]push]` | available | Rebases the current branch onto its base branch, safely (see below), then pushes it with `--force-with-lease` if `rebase.push` or `--push` says so. |
-| `pmm doctor [--no-fetch] [--offline] [--build] [--strict]` | available | Runs every enabled check (cycles, git status after a fetch, dependencies, and the builds with `--build`); the entry point for CI. |
+| `pmm doctor [--no-fetch] [--offline] [--build] [--strict] [--json <file>] [--junit <file>] [--html <file>]` | available | Runs every enabled check (cycles, git status after a fetch, dependencies, and the builds with `--build`); the entry point for CI. Can also write the result as JSON, JUnit XML and a self-contained HTML page. |
 
 Global options: `-c, --config <file>`, `-v, --verbose`, `-h, --help`, `-V, --version`.
 
@@ -56,6 +56,27 @@ Global options: `-c, --config <file>`, `-v, --verbose`, `-h, --help`, `-V, --ver
 | 1 | Warnings only, when `--strict` is given |
 | 2 | At least one check reported an error |
 | 3 | The tool could not run: invalid configuration, bad arguments, missing executable |
+
+### Using pmm in CI
+
+`pmm doctor` is meant for the CI factory: one command, an exit code, and reports to archive.
+
+```shell
+pmm doctor --build --strict --json target/pmm.json --junit target/pmm-junit.xml --html target/pmm.html
+```
+
+- **Exit code**: see above; `--strict` makes warnings fail the job too.
+- **JUnit XML**: one test suite per category of checks (`pmm.graph`, `pmm.git`, `pmm.deps`, `pmm.build`)
+  and one test case per repository, which fails when that repository has an error in that category.
+  Warnings and information are in the test case's output. Any CI server that reads JUnit results
+  (Jenkins, GitLab, Azure DevOps, TeamCity...) shows them without a plugin.
+- **JSON**: everything the run found (repositories, dependencies, builds, blockers, findings, notes) for
+  scripts and dashboards. Fields are only ever added, never renamed.
+- **HTML**: one file with no script and no external resource, readable from a build artifact or an
+  e-mail, in light or dark mode.
+
+`ask` is the default push policy of `pmm rebase`, and CI has no terminal to ask in, so CI never pushes
+unless `rebase.push: always` or `--push`.
 
 ## Configuration
 
@@ -286,4 +307,8 @@ read: a version that only it defines is reported as a warning instead of being g
 | 3 | Dependency checks with Nexus, `pmm deps`, `pmm doctor` |
 | 4 | Parallel builds, blocker analysis, fingerprint cache, `pmm build`, `pmm doctor --build` |
 | 5 | Conflict prediction and safe rebase, `pmm sync`, `pmm rebase` |
-| 6 | HTML, JSON and JUnit XML reports; integration builds against upstream sources |
+| 6 | JSON, JUnit XML and HTML reports from `pmm doctor` |
+
+Possible next steps, not started: building consumers against the sources of their upstream
+repositories rather than their last release (an "integration" build before releasing), and a
+`pmm release-order` that lists which repositories to release, in which order, to unblock the others.
