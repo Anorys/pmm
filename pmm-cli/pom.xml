@@ -40,6 +40,10 @@
             <artifactId>pmm-build</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.anorys.pmm</groupId>
+            <artifactId>pmm-tui</artifactId>
+        </dependency>
+        <dependency>
             <groupId>info.picocli</groupId>
             <artifactId>picocli</artifactId>
         </dependency>

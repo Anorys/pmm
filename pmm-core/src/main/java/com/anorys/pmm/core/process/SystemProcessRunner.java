@@ -106,6 +106,8 @@ public final class SystemProcessRunner implements ProcessRunner {
                 if (log != null) {
                     log.write(line);
                     log.write(System.lineSeparator());
+                    // Flushed line by line so that the dashboard can follow a running build in its log.
+                    log.flush();
                 }
             }
         } catch (IOException e) {

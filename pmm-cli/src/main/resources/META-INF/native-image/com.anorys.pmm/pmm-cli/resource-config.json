@@ -1,7 +1,8 @@
 {
   "resources": {
     "includes": [
-      { "pattern": "\\Qpmm-version.properties\\E" }
+      { "pattern": "\\Qpmm-version.properties\\E" },
+      { "pattern": "\\Qdev/tamboui/tui/bindings/\\E[a-z]+\\.properties" }
     ]
   }
 }
