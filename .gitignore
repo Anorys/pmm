@@ -1,0 +1,18 @@
+target/
+*.class
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# pmm state and personal overrides, when the tool is run inside this repository
+.pmm/
+pmm.local.yaml
