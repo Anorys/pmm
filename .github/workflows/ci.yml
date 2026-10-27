@@ -116,6 +116,18 @@ jobs:
           code=$?
           set -e
           test "$code" -eq 2
+          # Without a terminal the dashboard must refuse to start (exit 3), not hang or draw garbage.
+          set +e
+          "$exe" ui --demo < /dev/null | cat
+          code=${PIPESTATUS[0]}
+          set -e
+          test "$code" -eq 3
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            # In a pseudo-terminal: the demo dashboard draws, builds, then quits on q.
+            (sleep 4; printf b; sleep 4; printf 2; sleep 2; printf q) \
+              | script -qfec "stty cols 140 rows 40; TERM=xterm-256color '$exe' ui --demo" /dev/null > "$RUNNER_TEMP/ui.txt"
+            grep -q "project modules manager" "$RUNNER_TEMP/ui.txt"
+          fi
           set +e
           "$exe" no-such-command
           code=$?

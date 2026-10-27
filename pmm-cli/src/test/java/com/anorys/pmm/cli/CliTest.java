@@ -42,7 +42,7 @@ class CliTest {
 
     @Test
     void everyCommandHasHelp() {
-        for (String command : new String[]{"init", "config", "graph", "status", "deps", "build", "sync", "rebase", "doctor"}) {
+        for (String command : new String[]{"init", "config", "graph", "status", "deps", "build", "sync", "rebase", "doctor", "ui"}) {
             assertThat(run(command, "--help")).as(command).isEqualTo(ExitCodes.OK);
             assertThat(out.toString()).as(command).contains("Usage: pmm " + command);
         }
@@ -85,6 +85,13 @@ class CliTest {
     void unknownArgumentsAreToolErrors() {
         assertThat(run("frobnicate")).isEqualTo(ExitCodes.TOOL_ERROR);
         assertThat(run()).isEqualTo(ExitCodes.TOOL_ERROR);
+    }
+
+    @Test
+    void theDashboardNeedsATerminal() {
+        // Tests run without a console, as scripts and CI do: a clear error rather than a broken screen.
+        assertThat(run("ui", "--demo")).isEqualTo(ExitCodes.TOOL_ERROR);
+        assertThat(err.toString()).contains("needs an interactive terminal", "pmm doctor");
     }
 
     @Test

@@ -13,6 +13,7 @@ import picocli.CommandLine.Spec;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.Callable;
 
 @Command(name = "pmm",
         mixinStandardHelpOptions = true,
@@ -20,14 +21,14 @@ import java.util.List;
         description = "Health checks for a multi-repository Maven workspace: dependencies, builds, blockers and branch freshness.",
         subcommands = {InitCommand.class, ConfigCommand.class, GraphCommand.class, StatusCommand.class,
                 DepsCommand.class, BuildCommand.class,
-                SyncCommand.class, RebaseCommand.class, DoctorCommand.class, HelpCommand.class},
+                SyncCommand.class, RebaseCommand.class, DoctorCommand.class, UiCommand.class, HelpCommand.class},
         exitCodeListHeading = "%nExit codes:%n",
         exitCodeList = {
                 "0:healthy",
                 "1:warnings only (with --strict)",
                 "2:errors found",
                 "3:tool error (configuration, arguments, missing executable)"})
-public class PmmCommand implements Runnable {
+public class PmmCommand implements Callable<Integer> {
 
     @Spec
     CommandSpec spec;
@@ -39,9 +40,15 @@ public class PmmCommand implements Runnable {
     @Option(names = {"-v", "--verbose"}, scope = ScopeType.INHERIT, description = "Print more details.")
     boolean verbose;
 
+    /** Without a command: the dashboard in a terminal, the usage error elsewhere (scripts, CI). */
     @Override
-    public void run() {
-        throw new ParameterException(spec.commandLine(), "Missing command");
+    public Integer call() {
+        if (System.console() == null) {
+            throw new ParameterException(spec.commandLine(), "Missing command");
+        }
+        return configFile == null
+                ? spec.commandLine().execute("ui")
+                : spec.commandLine().execute("--config", configFile.toString(), "ui");
     }
 
     /** Loads the configuration given with --config, or found from the current directory. */

@@ -18,6 +18,7 @@
         <module>pmm-maven</module>
         <module>pmm-git</module>
         <module>pmm-build</module>
+        <module>pmm-tui</module>
         <module>pmm-cli</module>
     </modules>
 
@@ -28,6 +29,7 @@
 
         <picocli.version>4.7.6</picocli.version>
         <jackson.version>2.17.2</jackson.version>
+        <tamboui.version>0.6.0</tamboui.version>
         <maven-model.version>3.9.11</maven-model.version>
         <junit.version>5.10.3</junit.version>
         <assertj.version>3.26.3</assertj.version>
@@ -35,6 +37,7 @@
         <compiler-plugin.version>3.13.0</compiler-plugin.version>
         <surefire-plugin.version>3.3.1</surefire-plugin.version>
         <shade-plugin.version>3.6.0</shade-plugin.version>
+        <graalvm.sdk.version>23.1.2</graalvm.sdk.version>
         <native-plugin.version>0.10.3</native-plugin.version>
     </properties>
 
@@ -64,6 +67,18 @@
                 <groupId>com.anorys.pmm</groupId>
                 <artifactId>pmm-build</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.anorys.pmm</groupId>
+                <artifactId>pmm-tui</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tamboui</groupId>
+                <artifactId>tamboui-bom</artifactId>
+                <version>${tamboui.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>org.apache.maven</groupId>

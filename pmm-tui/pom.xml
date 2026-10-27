@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.anorys.pmm</groupId>
+        <artifactId>pmm-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>pmm-tui</artifactId>
+    <name>pmm-tui</name>
+    <description>The interactive terminal dashboard (pmm ui), drawn with TamboUI.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.anorys.pmm</groupId>
+            <artifactId>pmm-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.anorys.pmm</groupId>
+            <artifactId>pmm-config</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.anorys.pmm</groupId>
+            <artifactId>pmm-maven</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.anorys.pmm</groupId>
+            <artifactId>pmm-git</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.anorys.pmm</groupId>
+            <artifactId>pmm-build</artifactId>
+        </dependency>
+        <!-- The immediate-mode layers only: no toolkit, no CSS, no annotation-driven bindings,
+             so nothing needs reflection metadata in the native image. -->
+        <dependency>
+            <groupId>dev.tamboui</groupId>
+            <artifactId>tamboui-tui</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.tamboui</groupId>
+            <artifactId>tamboui-widgets</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.tamboui</groupId>
+            <artifactId>tamboui-jline3-backend</artifactId>
+        </dependency>
+        <!-- Compile-time only: the native-image substitution in com.anorys.pmm.tui.nativeimage. -->
+        <dependency>
+            <groupId>org.graalvm.sdk</groupId>
+            <artifactId>nativeimage</artifactId>
+            <version>${graalvm.sdk.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</project>

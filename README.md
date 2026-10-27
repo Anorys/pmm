@@ -39,9 +39,37 @@ pmm build                 # compiles every repository, several at a time; says w
 pmm sync                  # what each branch needs: nothing, a fast-forward, or a rebase (with predicted conflicts)
 pmm rebase billing        # rebases billing's branch onto origin/develop, safely (backup, abort on conflict)
 pmm doctor                # graph, status and deps (add --build for the builds); the command for CI
+pmm ui                    # the interactive dashboard (pmm alone does the same)
 ```
 
 `pmm` looks for `pmm.yaml` in the current directory and its parents; use `--config <file>` to point to another one.
+
+## The dashboard
+
+`pmm ui` (or `pmm` alone, in a terminal) opens an interactive dashboard in the Anorys colors: the whole
+workspace on one screen, refreshed in the background, with the actions one key away.
+
+![The workspace tab](docs/images/tui-workspace.png)
+
+| Tab | What it shows |
+|---|---|
+| `1` Workspace | One row per repository: branch, commits ahead of and behind the base branch, local changes, last build, dependency state; the selected repository in detail on the right, with its findings and what to do about them. |
+| `2` Build | The builds live: a progress bar per repository (from Maven's reactor position, or the duration of the last build), the module being built, the estimated time, and the log of the selected repository as it is written. |
+| `3` Dependencies | Every internal version against Nexus, the blockers and the releases that would unblock them. |
+| `4` Graph | The repositories in build layers; what the selected one needs and what needs it. |
+
+![A build in progress](docs/images/tui-build.png)
+
+Keys: `↑` `↓` select, `1`-`4` or `Tab` switch tab, `f` fetch, `b` build everything (unchanged repositories
+come from the cache), `B` build the selected repository without the cache, `r` rebase the selected
+branch (shows the plan and the predicted conflicts, asks first, then offers the `--force-with-lease`
+push), `d` check Nexus again, `?` help, `q` quit. On start it reads the POMs and the git status, then
+fetches and queries Nexus in the background.
+
+`pmm ui --demo` opens it on a made-up workspace of nine repositories with simulated git, Nexus and
+builds, to try it anywhere. The dashboard needs a terminal of at least 80 x 24; Windows Terminal is
+recommended on Windows. `PMM_ASCII=1` replaces the Unicode symbols for old consoles, and `NO_COLOR`
+turns colors off. Its visual rules are in the [style guide](docs/tui-style-guide.md).
 
 ## Commands
 
@@ -56,6 +84,7 @@ pmm doctor                # graph, status and deps (add --build for the builds);
 | `pmm sync [--repo <name>]... [--no-fetch] [--fast-forward]` | available | Fetches, then says for each repository whether its branch is up to date, can be fast-forwarded, or needs a rebase, and which files a rebase would conflict on. `--fast-forward` fast-forwards the branches that have no commit of their own and no local change. |
 | `pmm rebase <repo>... [--dry-run] [--no-fetch] [--autostash] [--keep-conflicts] [--[no-]push]` | available | Rebases the current branch onto its base branch, safely (see below), then pushes it with `--force-with-lease` if `rebase.push` or `--push` says so. |
 | `pmm doctor [--no-fetch] [--offline] [--build] [--strict] [--json <file>] [--junit <file>] [--html <file>]` | available | Runs every enabled check (cycles, git status after a fetch, dependencies, and the builds with `--build`); the entry point for CI. Can also write the result as JSON, JUnit XML and a self-contained HTML page. |
+| `pmm ui [--demo]` | available | Opens the interactive dashboard (see [The dashboard](#the-dashboard)); also what `pmm` alone does in a terminal. |
 
 Global options: `-c, --config <file>`, `-v, --verbose`, `-h, --help`, `-V, --version`.
 
@@ -200,8 +229,15 @@ this cheap, the code follows three rules:
   `maven-artifact`, and Nexus is queried with the JDK HTTP client (`maven-metadata.xml`), rather than
   with Maven Resolver and its Sisu/Guice container. The image is built with `--enable-http --enable-https`.
 
+- **The dashboard uses TamboUI's immediate-mode layers only** (`tamboui-tui`, `tamboui-widgets` and the
+  JLine 3 backend, created directly rather than discovered), not its toolkit, CSS or annotation-driven
+  bindings. JLine ships its own native-image metadata, including the JNI terminal provider used on Windows.
+  The image has no Flight Recorder, so TamboUI's JFR draw event is initialized at build time and reported
+  as disabled by a substitution (`pmm-tui/.../nativeimage/`).
+
 Resources loaded at runtime must be listed in
-`pmm-cli/src/main/resources/META-INF/native-image/com.anorys.pmm/pmm-cli/resource-config.json`.
+`pmm-cli/src/main/resources/META-INF/native-image/com.anorys.pmm/pmm-cli/resource-config.json` (the
+version file, and TamboUI's default key bindings).
 
 ## Project layout
 
@@ -211,6 +247,7 @@ pmm-config/   pmm.yaml model, loading and merging, validation, starter template
 pmm-maven/    reads the POMs into the workspace model (no Maven run); dependency checks against Nexus
 pmm-git/      git through the git command line: fetch, status, freshness, unreleased commits, safe rebase
 pmm-build/    Maven builds in parallel, failure analysis (blockers), fingerprint cache
+pmm-tui/      the interactive dashboard, drawn with TamboUI (immediate mode, JLine backend)
 pmm-cli/      picocli commands, renderers, exit codes, executable jar and native image
 ```
 
