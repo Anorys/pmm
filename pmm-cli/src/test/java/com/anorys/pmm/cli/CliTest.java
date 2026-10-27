@@ -42,7 +42,7 @@ class CliTest {
 
     @Test
     void everyCommandHasHelp() {
-        for (String command : new String[]{"init", "config", "graph", "status", "deps", "build", "sync", "rebase", "doctor", "ui"}) {
+        for (String command : new String[]{"init", "config", "graph", "status", "deps", "build", "sync", "rebase", "doctor", "ui", "self-update"}) {
             assertThat(run(command, "--help")).as(command).isEqualTo(ExitCodes.OK);
             assertThat(out.toString()).as(command).contains("Usage: pmm " + command);
         }
