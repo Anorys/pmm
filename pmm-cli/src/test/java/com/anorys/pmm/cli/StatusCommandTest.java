@@ -68,7 +68,7 @@ class StatusCommandTest {
                 .containsPattern("billing\\s+develop\\s+origin/develop\\s+0\\s+0\\s+up to date\\s+1 change")
                 .containsPattern("reporting\\s+-\\s+origin/develop\\s+-\\s+-\\s+unavailable")
                 .contains("warn   core       25 commits behind origin/develop")
-                .contains("-> rebase feature/PMM-142 onto origin/develop")
+                .contains("-> pmm rebase core (rebases feature/PMM-142 onto origin/develop)")
                 .contains("info   billing    uncommitted changes: 1 modified")
                 .contains("0 errors, 2 warnings, 1 info");
         assertThat(code).isEqualTo(ExitCodes.OK);

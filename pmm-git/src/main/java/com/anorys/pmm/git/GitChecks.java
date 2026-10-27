@@ -71,8 +71,8 @@ public final class GitChecks {
         String message = status.behind() + " commit" + (status.behind() == 1 ? "" : "s") + " behind " + status.baseRef()
                 + (days > 0 ? ", oldest missing commit " + days + " day" + (days == 1 ? "" : "s") + " old" : "");
         String suggestion = status.canFastForward()
-                ? "fast-forward: git merge --ff-only " + status.baseRef()
-                : "rebase " + status.tree().branch() + " onto " + status.baseRef();
+                ? "fast-forward: pmm sync --fast-forward (git merge --ff-only " + status.baseRef() + ")"
+                : "pmm rebase " + status.name() + " (rebases " + status.tree().branch() + " onto " + status.baseRef() + ")";
         Severity severity = tooFar ? setting.severity() : Severity.INFO;
         findings.add(new Finding(KnownChecks.GIT_BEHIND, severity, status.name(), message, suggestion));
     }

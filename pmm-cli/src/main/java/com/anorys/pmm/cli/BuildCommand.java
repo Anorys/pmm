@@ -53,7 +53,7 @@ public class BuildCommand implements Callable<Integer> {
     public Integer call() {
         PrintWriter out = spec.commandLine().getOut();
         PmmConfig config = pmm.loadConfig();
-        List<RepositoryConfig> selected = select(config);
+        List<RepositoryConfig> selected = Selection.repositories(spec, config, repositories);
         if (parallel != null && parallel < 1) {
             throw new ParameterException(spec.commandLine(), "--parallel must be at least 1");
         }
@@ -75,16 +75,4 @@ public class BuildCommand implements Callable<Integer> {
         return ScanWarnings.exitCode(ExitCodes.fromFindings(result.findings(), strict), scan.warnings(), strict);
     }
 
-    private List<RepositoryConfig> select(PmmConfig config) {
-        if (repositories.isEmpty()) {
-            return config.monitoredRepositories();
-        }
-        List<RepositoryConfig> selected = new ArrayList<>();
-        for (String name : repositories) {
-            selected.add(config.repository(name).orElseThrow(() -> new ParameterException(spec.commandLine(),
-                    "Unknown repository '" + name + "'; known: "
-                            + String.join(", ", config.repositories().stream().map(RepositoryConfig::name).toList()))));
-        }
-        return selected;
-    }
 }

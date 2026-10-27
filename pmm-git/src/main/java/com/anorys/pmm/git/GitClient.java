@@ -23,6 +23,8 @@ public final class GitClient {
     /** Long enough for a fetch over a slow VPN; a hung credential prompt is prevented separately. */
     static final Duration FETCH_TIMEOUT = Duration.ofMinutes(3);
     static final Duration LOCAL_TIMEOUT = Duration.ofMinutes(1);
+    /** A rebase runs hooks and may replay many commits. */
+    static final Duration REBASE_TIMEOUT = Duration.ofMinutes(10);
 
     private final ProcessRunner runner;
     private final Path repository;
@@ -119,6 +121,74 @@ public final class GitClient {
                 .stream().map(String::trim).filter(l -> !l.isEmpty()).sorted().toList();
     }
 
+    /** Commit id of {@code ref}; throws when it does not exist. */
+    public String revParse(String ref) {
+        return lastLine(check(run(LOCAL_TIMEOUT, "rev-parse", "--verify", ref + "^{commit}"), "rev-parse " + ref));
+    }
+
+    /**
+     * Predicts the conflicts of bringing {@code head} onto {@code base} with {@code git merge-tree}
+     * (git 2.38 or later), without touching the working tree or the index. The result of a rebase
+     * has the same content as this merge, so the files listed are the ones a rebase would stop on
+     * (a rebase can also stop on a file that one commit changes and a later one changes back).
+     *
+     * @return the conflicting files (empty when the rebase applies cleanly), or empty when git is too old
+     */
+    public Optional<List<String>> predictConflicts(String base, String head) {
+        ProcessResult result = run(LOCAL_TIMEOUT, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head);
+        if (result.timedOut() || result.exitCode() > 1) {
+            return Optional.empty();
+        }
+        List<String> lines = result.lines().stream().map(String::trim).toList();
+        int start = 0;
+        while (start < lines.size() && !lines.get(start).matches("[0-9a-f]{40,64}")) {
+            start++;    // skip banners printed before the tree id
+        }
+        if (start == lines.size()) {
+            return Optional.empty();
+        }
+        List<String> files = lines.subList(start + 1, lines.size()).stream()
+                .takeWhile(l -> !l.isEmpty()).distinct().toList();
+        return Optional.of(result.exitCode() == 0 ? List.of() : files);
+    }
+
+    /** Creates or moves {@code ref} to {@code commit}. */
+    public void updateRef(String ref, String commit) {
+        check(run(LOCAL_TIMEOUT, "update-ref", ref, commit), "update-ref " + ref);
+    }
+
+    /** Fast-forwards the current branch to {@code ref}; fails if that is not a fast-forward. */
+    public void fastForward(String ref) {
+        check(run(LOCAL_TIMEOUT, "merge", "--ff-only", "--quiet", ref), "merge --ff-only " + ref);
+    }
+
+    /** Runs {@code git rebase}; the result says whether it stopped. */
+    public ProcessResult rebase(String onto, boolean autostash) {
+        List<String> args = new ArrayList<>(List.of("rebase"));
+        args.add(autostash ? "--autostash" : "--no-autostash");
+        args.add(onto);
+        return run(REBASE_TIMEOUT, args.toArray(String[]::new));
+    }
+
+    public void rebaseAbort() {
+        check(run(LOCAL_TIMEOUT, "rebase", "--abort"), "rebase --abort");
+    }
+
+    /** Files with unresolved conflicts in the working tree. */
+    public List<String> conflictedFiles() {
+        return check(run(LOCAL_TIMEOUT, "diff", "--name-only", "--diff-filter=U"), "diff --diff-filter=U").lines()
+                .stream().map(String::trim).filter(l -> !l.isEmpty()).toList();
+    }
+
+    /**
+     * {@code git push --force-with-lease=<branch>:<expected> <remote> <branch>}: refused when the remote
+     * branch moved since {@code expected}, so nobody's work is overwritten.
+     */
+    public void pushWithLease(String remote, String branch, String expected) {
+        check(run(FETCH_TIMEOUT, "push", "--quiet", "--force-with-lease=refs/heads/" + branch + ":" + expected,
+                remote, "refs/heads/" + branch + ":refs/heads/" + branch), "push " + remote + " " + branch);
+    }
+
     /** The operation git is in the middle of, read from the git directory. */
     public Operation operationInProgress() {
         ProcessResult result = run(LOCAL_TIMEOUT, "rev-parse", "--absolute-git-dir");
@@ -145,6 +215,8 @@ public final class GitClient {
                 .in(repository)
                 .env("GIT_TERMINAL_PROMPT", "0")      // fail instead of waiting for a password
                 .env("GCM_INTERACTIVE", "never")       // same for Git Credential Manager on Windows
+                .env("GIT_EDITOR", "true")             // a rebase must never wait for an editor
+                .env("GIT_SEQUENCE_EDITOR", "true")
                 .timeout(timeout)
                 .build());
     }

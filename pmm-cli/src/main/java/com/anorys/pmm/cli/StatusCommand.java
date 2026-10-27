@@ -15,7 +15,6 @@ import com.anorys.pmm.git.WorkingTreeStatus;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
-import picocli.CommandLine.ParameterException;
 import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
 
@@ -51,7 +50,7 @@ public class StatusCommand implements Callable<Integer> {
     public Integer call() {
         PrintWriter out = spec.commandLine().getOut();
         PmmConfig config = pmm.loadConfig();
-        List<RepositoryConfig> selected = select(config);
+        List<RepositoryConfig> selected = Selection.repositories(spec, config, repositories);
 
         List<RepositoryStatus> statuses = new StatusCollector(new SystemProcessRunner()).collect(config, selected, !noFetch);
         List<Finding> findings = new GitChecks(config, Clock.systemDefaultZone()).evaluate(statuses);
@@ -63,19 +62,6 @@ public class StatusCommand implements Callable<Integer> {
         out.println(FindingsRenderer.summary(findings) + (noFetch ? " (not fetched)" : ""));
         out.flush();
         return ExitCodes.fromFindings(findings, strict);
-    }
-
-    private List<RepositoryConfig> select(PmmConfig config) {
-        if (repositories.isEmpty()) {
-            return config.monitoredRepositories();
-        }
-        List<RepositoryConfig> selected = new ArrayList<>();
-        for (String name : repositories) {
-            selected.add(config.repository(name).orElseThrow(() -> new ParameterException(spec.commandLine(),
-                    "Unknown repository '" + name + "'; known: "
-                            + String.join(", ", config.repositories().stream().map(RepositoryConfig::name).toList()))));
-        }
-        return selected;
     }
 
     static String table(List<RepositoryStatus> statuses, List<Finding> findings) {
