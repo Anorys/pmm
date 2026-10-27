@@ -15,6 +15,7 @@
     <modules>
         <module>pmm-core</module>
         <module>pmm-config</module>
+        <module>pmm-maven</module>
         <module>pmm-cli</module>
     </modules>
 
@@ -25,6 +26,7 @@
 
         <picocli.version>4.7.6</picocli.version>
         <jackson.version>2.17.2</jackson.version>
+        <maven-model.version>3.9.11</maven-model.version>
         <junit.version>5.10.3</junit.version>
         <assertj.version>3.26.3</assertj.version>
 
@@ -45,6 +47,16 @@
                 <groupId>com.anorys.pmm</groupId>
                 <artifactId>pmm-config</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.anorys.pmm</groupId>
+                <artifactId>pmm-maven</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.maven</groupId>
+                <artifactId>maven-model</artifactId>
+                <version>${maven-model.version}</version>
             </dependency>
             <dependency>
                 <groupId>info.picocli</groupId>

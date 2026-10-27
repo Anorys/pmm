@@ -9,7 +9,7 @@
 
 It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and macOS) built with GraalVM, so it starts instantly and needs no installed JVM.
 
-> **Status: phase 0.** The project skeleton, the configuration and the `init` and `config` commands work.
+> **Status: phase 1.** The configuration, `init`, `config` and the dependency graph (`graph`) work.
 > The checks (`status`, `deps`, `build`, `sync`, `rebase`, `doctor`) come in the next phases; see the
 > [roadmap](#roadmap).
 
@@ -20,6 +20,7 @@ It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and
 pmm init                  # finds the git repositories with a pom.xml and writes pmm.yaml
 pmm config                # validates pmm.yaml and prints the effective configuration
 pmm config --validate     # validates only; warns about repositories that are not cloned
+pmm graph                 # build order, who uses what from whom (with versions), cycles
 ```
 
 `pmm` looks for `pmm.yaml` in the current directory and its parents; use `--config <file>` to point to another one.
@@ -30,6 +31,7 @@ pmm config --validate     # validates only; warns about repositories that are no
 |---|---|---|
 | `pmm init [<workspace>] [--base-branch <branch>] [--force]` | available | Writes a commented starter `pmm.yaml` listing the repositories found in the folder. |
 | `pmm config [--validate] [--strict]` | available | Validates the configuration (all problems at once) and prints the effective values. |
+| `pmm graph [--repo <name>] [-f text\|mermaid\|dot] [--modules] [--strict]` | available | Reads the POMs and shows the build order, the artifacts and versions each repository uses from the others, and cycles. `--repo` shows what one repository depends on and what depends on it. |
 | `pmm status` | phase 2 | Branch, ahead/behind base, dirty state per repository. |
 | `pmm deps` | phase 3 | Dependency checks against the POMs and Nexus. |
 | `pmm build [--changed]` | phase 4 | Compiles repositories in parallel and explains what blocks what. |
@@ -159,10 +161,22 @@ Resources loaded at runtime must be listed in
 ```
 pmm-core/     severities, platform helpers, process execution (Windows-aware: mvn.cmd, PATHEXT)
 pmm-config/   pmm.yaml model, loading and merging, validation, starter template
-pmm-cli/      picocli commands, exit codes, executable jar and native image
+pmm-maven/    reads the POMs of the workspace into the workspace model (no Maven run)
+pmm-cli/      picocli commands, renderers, exit codes, executable jar and native image
 ```
 
-Modules for git, Maven, builds and reports are added in their phases.
+`pmm-core` also holds the workspace model (repositories, modules, references between artifacts) and a
+small directed-graph implementation (build layers, cycles, transitive dependents).
+Modules for git, builds and reports are added in their phases.
+
+### How the POMs are read
+
+`pmm` does not run Maven to build the graph, so `pmm graph` takes about a second for the whole workspace.
+It reads each repository's root `pom.xml` and its modules (including modules declared in profiles),
+looks up parents anywhere in the workspace by `groupId:artifactId`, and inherits properties and
+`dependencyManagement` along that chain. Parents, dependencies, imported BOMs and build plugins all
+count as references. A parent or BOM that lives only in Nexus (a corporate parent, for example) is not
+read: a version that only it defines is reported as a warning instead of being guessed.
 
 ## Roadmap
 

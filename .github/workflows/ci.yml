@@ -64,6 +64,11 @@ jobs:
           "$exe" init "$ws"
           "$exe" config --validate --strict --config "$ws/pmm.yaml"
           "$exe" config --config "$ws/pmm.yaml" > /dev/null
+          # The repository itself is a real multi-module workspace to read.
+          mkdir -p "$RUNNER_TEMP/self-ws" && cp -r "$PWD" "$RUNNER_TEMP/self-ws/pmm"
+          "$exe" init "$RUNNER_TEMP/self-ws"
+          "$exe" graph --config "$RUNNER_TEMP/self-ws/pmm.yaml"
+          "$exe" graph -f mermaid --modules --config "$RUNNER_TEMP/self-ws/pmm.yaml"
           set +e
           "$exe" no-such-command
           code=$?
