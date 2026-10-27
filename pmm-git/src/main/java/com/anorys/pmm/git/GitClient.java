@@ -103,6 +103,22 @@ public final class GitClient {
         return Integer.parseInt(lastLine(result));
     }
 
+    /** The tree id of {@code HEAD}: identical content gives an identical id. */
+    public String headTree() {
+        return lastLine(check(run(LOCAL_TIMEOUT, "rev-parse", "HEAD^{tree}"), "rev-parse HEAD^{tree}"));
+    }
+
+    /** The uncommitted changes to tracked files (staged or not), as a binary patch. */
+    public String diffHead() {
+        return check(run(LOCAL_TIMEOUT, "diff", "HEAD", "--binary", "--no-color", "--no-ext-diff"), "diff HEAD").output();
+    }
+
+    /** Untracked files that are not ignored, relative to the repository root. */
+    public List<String> untrackedFiles() {
+        return check(run(LOCAL_TIMEOUT, "ls-files", "--others", "--exclude-standard"), "ls-files --others").lines()
+                .stream().map(String::trim).filter(l -> !l.isEmpty()).sorted().toList();
+    }
+
     /** The operation git is in the middle of, read from the git directory. */
     public Operation operationInProgress() {
         ProcessResult result = run(LOCAL_TIMEOUT, "rev-parse", "--absolute-git-dir");

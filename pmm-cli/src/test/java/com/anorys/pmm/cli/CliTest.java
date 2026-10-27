@@ -41,6 +41,14 @@ class CliTest {
     }
 
     @Test
+    void everyCommandHasHelp() {
+        for (String command : new String[]{"init", "config", "graph", "status", "deps", "build", "doctor"}) {
+            assertThat(run(command, "--help")).as(command).isEqualTo(ExitCodes.OK);
+            assertThat(out.toString()).as(command).contains("Usage: pmm " + command);
+        }
+    }
+
+    @Test
     void initRefusesToOverwrite() throws IOException {
         Files.writeString(tmp.resolve("pmm.yaml"), "repositories: []\n");
 

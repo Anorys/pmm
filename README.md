@@ -9,9 +9,9 @@
 
 It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and macOS) built with GraalVM, so it starts instantly and needs no installed JVM.
 
-> **Status: phase 3.** The configuration, `init`, `config`, the dependency graph (`graph`), the git
-> status of every repository (`status`), the dependency checks against Nexus (`deps`) and `doctor` work.
-> Builds (`build`) and rebasing (`sync`, `rebase`) come in the next phases; see the [roadmap](#roadmap).
+> **Status: phase 4.** The configuration, `init`, `config`, the dependency graph (`graph`), the git
+> status of every repository (`status`), the dependency checks against Nexus (`deps`), parallel builds
+> (`build`) and `doctor` work. Rebasing (`sync`, `rebase`) comes next; see the [roadmap](#roadmap).
 
 ## Quick start
 
@@ -23,7 +23,8 @@ pmm config --validate     # validates only; warns about repositories that are no
 pmm graph                 # build order, who uses what from whom (with versions), cycles
 pmm status                # fetches every repository, then branch, ahead/behind origin/develop, local changes
 pmm deps                  # internal versions against Nexus: unreleased (blockers), SNAPSHOTs, outdated
-pmm doctor                # everything above; the command for CI
+pmm build                 # compiles every repository, several at a time; says which one blocks which
+pmm doctor                # graph, status and deps (add --build for the builds); the command for CI
 ```
 
 `pmm` looks for `pmm.yaml` in the current directory and its parents; use `--config <file>` to point to another one.
@@ -37,9 +38,9 @@ pmm doctor                # everything above; the command for CI
 | `pmm graph [--repo <name>] [-f text\|mermaid\|dot] [--modules] [--strict]` | available | Reads the POMs and shows the build order, the artifacts and versions each repository uses from the others, and cycles. `--repo` shows what one repository depends on and what depends on it. |
 | `pmm status [--repo <name>]... [--no-fetch] [--strict]` | available | Fetches all repositories in parallel, then shows each branch, how far it is ahead of and behind its base branch, local changes and any rebase or merge in progress, with a suggestion (fast-forward or rebase) for each branch that is behind. |
 | `pmm deps [--offline] [--strict]` | available | Lists every version a repository uses from another one, with the latest release in Nexus, and reports unreleased versions (what blocks whom), SNAPSHOTs, outdated releases, external versions Nexus does not have, divergent external versions, and upstream repositories with commits since their last release. |
-| `pmm build [--changed]` | phase 4 | Compiles repositories in parallel and explains what blocks what. |
+| `pmm build [--repo <name>]... [-j <n>] [--no-cache] [--offline] [--strict]` | available | Runs `maven.compileGoal` in every repository, `build.parallelRepos` at a time, skips repositories whose sources did not change since their last successful build, and explains each failure: the first compilation error, or the artifact missing from Nexus and the repository that must release it. |
 | `pmm sync`, `pmm rebase <repo>` | phase 5 | Predicts conflicts with the base branch and rebases safely. |
-| `pmm doctor [--no-fetch] [--offline] [--strict]` | available | Runs every enabled check (cycles, git status after a fetch, dependencies); the entry point for CI. Builds join in phase 4. |
+| `pmm doctor [--no-fetch] [--offline] [--build] [--strict]` | available | Runs every enabled check (cycles, git status after a fetch, dependencies, and the builds with `--build`); the entry point for CI. |
 
 Global options: `-c, --config <file>`, `-v, --verbose`, `-h, --help`, `-V, --version`.
 
@@ -107,6 +108,8 @@ checks:                            # severity: off, info, warn, error
   git.fetch-failed: warn
   git.base-missing: error          # the base branch does not exist on the remote
   graph.cycle: error
+  build.failed: error              # does not compile, or another Maven failure
+  build.blocked: error             # a dependency, parent, BOM or plugin could not be downloaded
 
 rebase:
   requireCleanTree: true
@@ -171,12 +174,13 @@ pmm-core/     severities, platform helpers, process execution (Windows-aware: mv
 pmm-config/   pmm.yaml model, loading and merging, validation, starter template
 pmm-maven/    reads the POMs into the workspace model (no Maven run); dependency checks against Nexus
 pmm-git/      git through the git command line: fetch, status, ahead/behind, freshness, unreleased commits
+pmm-build/    Maven builds in parallel, failure analysis (blockers), fingerprint cache
 pmm-cli/      picocli commands, renderers, exit codes, executable jar and native image
 ```
 
 `pmm-core` also holds the workspace model (repositories, modules, references between artifacts) and a
 small directed-graph implementation (build layers, cycles, transitive dependents).
-Modules for builds and reports are added in their phases.
+Reports are added in phase 6.
 
 ### How the git status is read
 
@@ -219,6 +223,29 @@ latest release is found from `releaseTagPattern` when set, else from a tag that 
 `<version>3.1.4</version>`. Commits whose message contains `[maven-release-plugin]` and merge commits
 are not counted. `pmm deps` uses the last fetched state; `pmm doctor` and `pmm status` fetch first.
 
+### How builds run
+
+`pmm build` runs, in each repository, `<maven> -B -ntp [-o] [-s settings] [-P profiles] [-T threads]
+[-pl :module,... -am] <compileGoal> <extraArgs>` with `MAVEN_OPTS=-Xmx<memoryPerBuild>` and stops it
+after `timeoutMinutes`. With `maven.executable: auto` it uses `mvnd` when it is on the PATH, else the
+repository's own Maven wrapper (`mvnw`/`mvnw.cmd`), else `mvn`. Repositories depend on each other
+through released versions, so they all build at the same time; `build.parallelRepos` (or `-j`) limits
+how many, to keep the machine usable. The full output of each build goes to `.pmm/logs/<repo>.log`
+under the workspace root.
+
+**What blocks what.** When Maven cannot download an artifact (a dependency, a parent, a BOM or a
+plugin), `pmm` looks up which monitored repository produces it and reports a blocker:
+`platform-core blocks billing, reporting (to release: core-api 3.1.5)`. Other failures show the first
+compilation error, or the first Maven error, with the path of the log.
+
+**The cache.** After a successful build, `pmm` stores a fingerprint of the repository in
+`.pmm/build-cache.json`: the commit's tree, the uncommitted changes, the untracked (not ignored)
+files and the Maven command line. The next `pmm build` skips the repository while the fingerprint is
+unchanged, so after the first run only what you changed is built again. Failures are never cached,
+and a repository that uses a SNAPSHOT from elsewhere is always built, since its result can change
+without any local change. `--no-cache` or `build.cache: false` builds everything. Add `.pmm/` to the
+ignore file of the workspace if the workspace folder is itself under version control.
+
 ### How the POMs are read
 
 `pmm` does not run Maven to build the graph, so `pmm graph` takes about a second for the whole workspace.
@@ -236,6 +263,6 @@ read: a version that only it defines is reported as a warning instead of being g
 | 1 | Workspace model: POM scanning, repository and module graph, `pmm graph` |
 | 2 | Git status: fetch, ahead/behind, merge-base age, `pmm status` |
 | 3 | Dependency checks with Nexus, `pmm deps`, `pmm doctor` |
-| 4 | Parallel builds, blocker analysis, fingerprint cache, `pmm build` |
+| 4 | Parallel builds, blocker analysis, fingerprint cache, `pmm build`, `pmm doctor --build` |
 | 5 | Conflict prediction and safe rebase, `pmm sync`, `pmm rebase` |
 | 6 | HTML, JSON and JUnit XML reports; integration builds against upstream sources |

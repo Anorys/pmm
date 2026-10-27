@@ -86,6 +86,10 @@ jobs:
           code=$?
           set -e
           test "$code" -le 2
+          # A real Maven build of this repository through its wrapper, then a cache hit.
+          "$exe" build --config "$RUNNER_TEMP/self-ws/pmm.yaml"
+          "$exe" build --config "$RUNNER_TEMP/self-ws/pmm.yaml" | tee "$RUNNER_TEMP/second-build.txt"
+          grep -q "ok (cached)" "$RUNNER_TEMP/second-build.txt"
           set +e
           "$exe" no-such-command
           code=$?
