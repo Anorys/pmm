@@ -21,8 +21,9 @@ Each [release](https://github.com/aureg/project-modules-manager/releases) has th
 Rename the one for your system to `pmm.exe` (or `pmm`) and put it on your `PATH`. There is no macOS
 build yet: [build it from source](#building).
 
-To publish a release, push a tag `vX.Y.Z` on `main`: the Release workflow builds the executables at
-version X.Y.Z and attaches them to a new GitHub release.
+To publish a release, push a tag `vX.Y.Z` on `main`, or run the Release workflow from the Actions tab
+with version X.Y.Z: it builds the executables at that version and attaches them to a new GitHub release
+`vX.Y.Z` (creating the tag if needed).
 
 ## Quick start
 
