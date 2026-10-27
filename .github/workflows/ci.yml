@@ -88,6 +88,23 @@ jobs:
           code=$?
           set -e
           test "$code" -le 2
+          # Several real repositories: git runs in parallel (this crashed the Windows exe with virtual threads).
+          multi="$RUNNER_TEMP/multi-ws"
+          for name in core billing reporting invoicing catalog shipping; do
+            mkdir -p "$multi/$name"
+            printf '<project><modelVersion>4.0.0</modelVersion><groupId>com.example</groupId><artifactId>%s</artifactId><version>1.0.0-SNAPSHOT</version></project>\n' "$name" > "$multi/$name/pom.xml"
+            git -C "$multi/$name" init --quiet -b develop
+            git -C "$multi/$name" add pom.xml
+            git -C "$multi/$name" -c user.name=ci -c user.email=ci@example.com -c commit.gpgsign=false commit --quiet -m init
+          done
+          "$exe" init "$multi"
+          for i in 1 2 3; do
+            set +e
+            "$exe" doctor --no-fetch --config "$multi/pmm.yaml" > /dev/null
+            code=$?
+            set -e
+            test "$code" -le 2
+          done
           # A real Maven build of this repository through its wrapper, then a cache hit.
           "$exe" build --config "$RUNNER_TEMP/self-ws/pmm.yaml"
           "$exe" build --config "$RUNNER_TEMP/self-ws/pmm.yaml" | tee "$RUNNER_TEMP/second-build.txt"

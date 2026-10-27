@@ -56,7 +56,8 @@ public final class SystemProcessRunner implements ProcessRunner {
         closeQuietly(process);
 
         StringBuilder output = new StringBuilder();
-        Thread reader = Thread.ofVirtual().start(() -> pump(process, output, spec.logFile()));
+        // A platform thread: virtual threads crash process handling in the Windows native image.
+        Thread reader = Thread.ofPlatform().daemon().name("pmm-output").start(() -> pump(process, output, spec.logFile()));
         boolean timedOut = false;
         try {
             if (spec.timeout() == null) {

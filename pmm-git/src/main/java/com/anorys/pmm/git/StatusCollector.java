@@ -28,7 +28,10 @@ public final class StatusCollector {
 
     /** Statuses in the order of {@code repositories}. */
     public List<RepositoryStatus> collect(PmmConfig config, List<RepositoryConfig> repositories, boolean fetch) {
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        // Platform threads: in the Windows native image, starting a process from a virtual thread crashes
+        // the process (GraalVM 21, ProcessImpl.create runs without a JNI environment).
+        try (ExecutorService executor = Executors.newFixedThreadPool(Math.max(1, Math.min(repositories.size(), 16)),
+                Thread.ofPlatform().name("pmm-git-", 1).daemon().factory())) {
             List<Future<RepositoryStatus>> futures = new ArrayList<>();
             for (RepositoryConfig repository : repositories) {
                 futures.add(executor.submit(() -> collect(config, repository, fetch)));
