@@ -31,7 +31,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
 /**
@@ -181,18 +180,12 @@ public final class DependencyChecks {
         if (source == null || artifacts.isEmpty()) {
             return;
         }
-        Semaphore permits = new Semaphore(PARALLEL_REQUESTS);
         Map<ArtifactKey, Future<Optional<ArtifactMetadata>>> futures = new LinkedHashMap<>();
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        // Platform threads, as everywhere in pmm: virtual threads are unreliable in the Windows native image.
+        try (ExecutorService executor = Executors.newFixedThreadPool(Math.min(artifacts.size(), PARALLEL_REQUESTS),
+                Thread.ofPlatform().name("pmm-nexus-", 1).daemon().factory())) {
             for (ArtifactKey artifact : artifacts) {
-                futures.put(artifact, executor.submit(() -> {
-                    permits.acquire();
-                    try {
-                        return source.fetch(artifact);
-                    } finally {
-                        permits.release();
-                    }
-                }));
+                futures.put(artifact, executor.submit(() -> source.fetch(artifact)));
             }
             for (Map.Entry<ArtifactKey, Future<Optional<ArtifactMetadata>>> entry : futures.entrySet()) {
                 metadata.put(entry.getKey(), entry.getValue().get());
