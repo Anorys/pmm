@@ -9,9 +9,9 @@
 
 It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and macOS) built with GraalVM, so it starts instantly and needs no installed JVM.
 
-> **Status: phase 1.** The configuration, `init`, `config` and the dependency graph (`graph`) work.
-> The checks (`status`, `deps`, `build`, `sync`, `rebase`, `doctor`) come in the next phases; see the
-> [roadmap](#roadmap).
+> **Status: phase 2.** The configuration, `init`, `config`, the dependency graph (`graph`) and the git
+> status of every repository (`status`) work. The other checks (`deps`, `build`, `sync`, `rebase`,
+> `doctor`) come in the next phases; see the [roadmap](#roadmap).
 
 ## Quick start
 
@@ -21,6 +21,7 @@ pmm init                  # finds the git repositories with a pom.xml and writes
 pmm config                # validates pmm.yaml and prints the effective configuration
 pmm config --validate     # validates only; warns about repositories that are not cloned
 pmm graph                 # build order, who uses what from whom (with versions), cycles
+pmm status                # fetches every repository, then branch, ahead/behind origin/develop, local changes
 ```
 
 `pmm` looks for `pmm.yaml` in the current directory and its parents; use `--config <file>` to point to another one.
@@ -32,7 +33,7 @@ pmm graph                 # build order, who uses what from whom (with versions)
 | `pmm init [<workspace>] [--base-branch <branch>] [--force]` | available | Writes a commented starter `pmm.yaml` listing the repositories found in the folder. |
 | `pmm config [--validate] [--strict]` | available | Validates the configuration (all problems at once) and prints the effective values. |
 | `pmm graph [--repo <name>] [-f text\|mermaid\|dot] [--modules] [--strict]` | available | Reads the POMs and shows the build order, the artifacts and versions each repository uses from the others, and cycles. `--repo` shows what one repository depends on and what depends on it. |
-| `pmm status` | phase 2 | Branch, ahead/behind base, dirty state per repository. |
+| `pmm status [--repo <name>]... [--no-fetch] [--strict]` | available | Fetches all repositories in parallel, then shows each branch, how far it is ahead of and behind its base branch, local changes and any rebase or merge in progress, with a suggestion (fast-forward or rebase) for each branch that is behind. |
 | `pmm deps` | phase 3 | Dependency checks against the POMs and Nexus. |
 | `pmm build [--changed]` | phase 4 | Compiles repositories in parallel and explains what blocks what. |
 | `pmm sync`, `pmm rebase <repo>` | phase 5 | Predicts conflicts with the base branch and rebases safely. |
@@ -98,7 +99,10 @@ checks:                            # severity: off, info, warn, error
   deps.internal-snapshot: error
   deps.undeclared-internal: warn
   git.behind: { severity: warn, maxCommits: 20, maxDays: 7 }
-  git.dirty: info
+  git.dirty: info                  # uncommitted changes, or a rebase/merge in progress
+  git.not-cloned: warn
+  git.fetch-failed: warn
+  git.base-missing: error          # the base branch does not exist on the remote
   graph.cycle: error
 
 rebase:
@@ -162,12 +166,22 @@ Resources loaded at runtime must be listed in
 pmm-core/     severities, platform helpers, process execution (Windows-aware: mvn.cmd, PATHEXT)
 pmm-config/   pmm.yaml model, loading and merging, validation, starter template
 pmm-maven/    reads the POMs of the workspace into the workspace model (no Maven run)
+pmm-git/      git through the git command line: fetch, status, ahead/behind, freshness checks
 pmm-cli/      picocli commands, renderers, exit codes, executable jar and native image
 ```
 
 `pmm-core` also holds the workspace model (repositories, modules, references between artifacts) and a
 small directed-graph implementation (build layers, cycles, transitive dependents).
-Modules for git, builds and reports are added in their phases.
+Modules for builds and reports are added in their phases.
+
+### How the git status is read
+
+`pmm` runs the `git` executable, so your credentials, SSH keys, proxy and Git Credential Manager settings
+apply. Credential prompts are disabled (`GIT_TERMINAL_PROMPT=0`): a fetch that needs a password fails
+with a `git.fetch-failed` finding instead of hanging, and the status then uses the last fetched state.
+"Behind" counts the commits of the base branch missing from `HEAD`; its age is the commit date of the
+oldest missing one. A branch is flagged (`git.behind` severity) once it is `maxCommits` behind or that
+commit is `maxDays` old; a smaller lag is reported as information only.
 
 ### How the POMs are read
 

@@ -1,5 +1,10 @@
 package com.anorys.pmm.cli;
 
+import com.anorys.pmm.core.Severity;
+import com.anorys.pmm.core.check.Finding;
+
+import java.util.Collection;
+
 /** Process exit codes, the contract with CI pipelines. */
 public final class ExitCodes {
 
@@ -13,5 +18,14 @@ public final class ExitCodes {
     public static final int TOOL_ERROR = 3;
 
     private ExitCodes() {
+    }
+
+    /** {@link #ERRORS} for any error; {@link #WARNINGS} for warnings when strict; otherwise {@link #OK}. */
+    public static int fromFindings(Collection<Finding> findings, boolean strict) {
+        Severity highest = Finding.highest(findings);
+        if (highest == Severity.ERROR) {
+            return ERRORS;
+        }
+        return strict && highest == Severity.WARN ? WARNINGS : OK;
     }
 }
