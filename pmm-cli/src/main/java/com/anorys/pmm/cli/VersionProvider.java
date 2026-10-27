@@ -11,16 +11,23 @@ public class VersionProvider implements IVersionProvider {
 
     @Override
     public String[] getVersion() throws IOException {
+        return new String[] {
+                "pmm " + version(),
+                "Java " + System.getProperty("java.version") + " (" + System.getProperty("java.vm.name") + ")",
+                System.getProperty("os.name") + " " + System.getProperty("os.arch")
+        };
+    }
+
+    /** The pmm version, or "unknown" when the resource is missing (running from an IDE without a build). */
+    static String version() {
         Properties properties = new Properties();
         try (InputStream in = VersionProvider.class.getResourceAsStream("/pmm-version.properties")) {
             if (in != null) {
                 properties.load(in);
             }
+        } catch (IOException e) {
+            return "unknown";
         }
-        return new String[] {
-                "pmm " + properties.getProperty("version", "unknown"),
-                "Java " + System.getProperty("java.version") + " (" + System.getProperty("java.vm.name") + ")",
-                System.getProperty("os.name") + " " + System.getProperty("os.arch")
-        };
+        return properties.getProperty("version", "unknown");
     }
 }

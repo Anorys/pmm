@@ -21,6 +21,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -123,6 +131,47 @@ class DepsCommandTest {
                 .contains("warn   billing  ")       // not a git repository
                 .contains("1 error, 2 warnings, 1 info");
         assertThat(code).isEqualTo(ExitCodes.ERRORS);
+    }
+
+    @Test
+    void doctorWritesJsonJUnitAndHtmlReports() throws Exception {
+        Path reports = ws.resolve("out/reports");
+        int code = run("doctor", "--no-fetch", "--json", reports.resolve("pmm.json").toString(),
+                "--junit", reports.resolve("pmm-junit.xml").toString(), "--html", reports.resolve("pmm.html").toString());
+
+        assertThat(code).isEqualTo(ExitCodes.ERRORS);
+        assertThat(out.toString()).contains("Report written: " + reports.resolve("pmm.json"));
+
+        JsonNode json = new ObjectMapper().readTree(reports.resolve("pmm.json").toFile());
+        assertThat(json.get("tool").asText()).isEqualTo("pmm");
+        assertThat(json.get("exitCode").asInt()).isEqualTo(2);
+        assertThat(json.at("/summary/errors").asInt()).isEqualTo(1);
+        assertThat(json.get("fetched").asBoolean()).isFalse();
+        assertThat(json.get("repositories")).hasSize(3);
+        assertThat(json.at("/dependencies/0/state").asText()).isEqualTo("not_released");
+        assertThat(json.at("/dependencies/0/artifact").asText()).isEqualTo("com.anorys.core:core-api");
+        assertThat(json.get("findings")).anySatisfy(f -> {
+            assertThat(f.get("check").asText()).isEqualTo("deps.release-missing");
+            assertThat(f.get("severity").asText()).isEqualTo("error");
+            assertThat(f.get("repository").asText()).isEqualTo("billing");
+        });
+
+        Document junit = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                .parse(reports.resolve("pmm-junit.xml").toFile());
+        Element suites = junit.getDocumentElement();
+        assertThat(suites.getAttribute("failures")).isEqualTo("1");
+        NodeList failures = junit.getElementsByTagName("failure");
+        assertThat(failures.getLength()).isEqualTo(1);
+        Element failed = (Element) failures.item(0).getParentNode();
+        assertThat(failed.getAttribute("classname")).isEqualTo("pmm.deps");
+        assertThat(failed.getAttribute("name")).isEqualTo("billing");
+        assertThat(((Element) failures.item(0)).getAttribute("type")).isEqualTo("deps.release-missing");
+
+        assertThat(Files.readString(reports.resolve("pmm.html")))
+                .startsWith("<!doctype html>")
+                .contains("<title>pmm doctor</title>", "billing uses core-api 3.1.5 from core, which is not released in Nexus")
+                .contains("not released")
+                .doesNotContain("<script", "<link", " src=");
     }
 
     private static String dependency(String version) {
