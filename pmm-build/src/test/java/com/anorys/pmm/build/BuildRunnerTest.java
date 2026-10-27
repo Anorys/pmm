@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -156,9 +157,15 @@ class BuildRunnerTest {
         return returned;
     }
 
+    /** One file per repository: parallel builds appending to a shared file can lose lines on Windows. */
     private List<String> calls() throws IOException {
-        Path file = ws.resolve("tools/calls.txt");
-        return Files.exists(file) ? Files.readAllLines(file).stream().filter(l -> !l.isBlank()).toList() : List.of();
+        List<String> calls = new ArrayList<>();
+        try (DirectoryStream<Path> files = Files.newDirectoryStream(ws.resolve("tools"), "calls-*.txt")) {
+            for (Path file : files) {
+                Files.readAllLines(file).stream().filter(l -> !l.isBlank()).forEach(calls::add);
+            }
+        }
+        return calls;
     }
 
     /** A Maven stand-in, as a .cmd script on Windows and a shell script elsewhere. */
@@ -168,7 +175,8 @@ class BuildRunnerTest {
             Path script = dir.resolve("fake-mvn.cmd");
             Files.writeString(script, String.join("\r\n",
                     "@echo off",
-                    "echo %CD% %*>> \"%~dp0calls.txt\"",
+                    "for %%I in (.) do set REPO=%%~nxI",
+                    "echo %CD% %*>> \"%~dp0calls-%REPO%.txt\"",
                     "if exist fail.txt (",
                     "  type fail.txt",
                     "  exit /b 1",
@@ -180,7 +188,7 @@ class BuildRunnerTest {
         Path script = dir.resolve("fake-mvn");
         Files.writeString(script, """
                 #!/bin/sh
-                echo "$PWD $*" >> "$(dirname "$0")/calls.txt"
+                echo "$PWD $*" >> "$(dirname "$0")/calls-$(basename "$PWD").txt"
                 if [ -f fail.txt ]; then cat fail.txt; exit 1; fi
                 echo "[INFO] BUILD SUCCESS"
                 """);
