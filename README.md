@@ -1,0 +1,177 @@
+# pmm — project modules manager
+
+`pmm` is a command-line tool that checks the health of a workspace made of several Maven repositories:
+
+- are the Maven dependencies consistent, and do the internal releases they need exist in Nexus?
+- does every monitored project compile?
+- which project blocks which?
+- is each branch up to date with its base branch (`origin/develop` by default), and can it be rebased safely?
+
+It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and macOS) built with GraalVM, so it starts instantly and needs no installed JVM.
+
+> **Status: phase 0.** The project skeleton, the configuration and the `init` and `config` commands work.
+> The checks (`status`, `deps`, `build`, `sync`, `rebase`, `doctor`) come in the next phases; see the
+> [roadmap](#roadmap).
+
+## Quick start
+
+```shell
+# In the folder that contains your repositories (for example C:\work\projects\anorys)
+pmm init                  # finds the git repositories with a pom.xml and writes pmm.yaml
+pmm config                # validates pmm.yaml and prints the effective configuration
+pmm config --validate     # validates only; warns about repositories that are not cloned
+```
+
+`pmm` looks for `pmm.yaml` in the current directory and its parents; use `--config <file>` to point to another one.
+
+## Commands
+
+| Command | Status | What it does |
+|---|---|---|
+| `pmm init [<workspace>] [--base-branch <branch>] [--force]` | available | Writes a commented starter `pmm.yaml` listing the repositories found in the folder. |
+| `pmm config [--validate] [--strict]` | available | Validates the configuration (all problems at once) and prints the effective values. |
+| `pmm status` | phase 2 | Branch, ahead/behind base, dirty state per repository. |
+| `pmm deps` | phase 3 | Dependency checks against the POMs and Nexus. |
+| `pmm build [--changed]` | phase 4 | Compiles repositories in parallel and explains what blocks what. |
+| `pmm sync`, `pmm rebase <repo>` | phase 5 | Predicts conflicts with the base branch and rebases safely. |
+| `pmm doctor` | phase 3+ | Runs every enabled check; the entry point for CI. |
+
+Global options: `-c, --config <file>`, `-v, --verbose`, `-h, --help`, `-V, --version`.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Healthy |
+| 1 | Warnings only, when `--strict` is given |
+| 2 | At least one check reported an error |
+| 3 | The tool could not run: invalid configuration, bad arguments, missing executable |
+
+## Configuration
+
+`pmm.yaml` is meant to be shared by the team. Each developer can add a `pmm.local.yaml` next to it for
+personal overrides; it is merged on top of `pmm.yaml` (mappings key by key, `repositories` by `name`,
+other lists replaced). Unknown keys are rejected, so typos are reported instead of silently ignored.
+
+Every key below is optional except `repositories[].name`. The values shown are the defaults unless noted.
+
+```yaml
+workspace:
+  root: .                          # relative to this file; repository paths are relative to the root
+  baseBranch: develop              # default base branch of every repository
+  remote: origin
+
+repositories:
+  - name: platform-core            # required; letters, digits, '.', '_' and '-'
+    path: platform-core            # default: the name
+    url: git@github.com:anorys/platform-core.git   # example; optional
+  - name: billing
+    baseBranch: release/2.4        # example: overrides workspace.baseBranch
+    modules: [billing-api, billing-service]        # default: ["*"] = all modules
+    releaseTagPattern: "billing-{version}"         # example; default: auto-detected
+  - name: legacy-adapter
+    enabled: false                 # listed but not monitored; default: true
+
+internalGroups: [com.anorys.*]     # example; group ids produced by these repositories
+
+maven:
+  executable: auto                 # auto (mvnd when installed, else mvn), mvn, mvnd, or a path
+  settings: ~/.m2/settings.xml     # example; default: Maven's own default
+  profiles: []
+  offline: false
+  threads: 1C
+  extraArgs: []                    # for example ["-Dmaven.javadoc.skip", "-Denforcer.skip"]
+  compileGoal: test-compile        # compile or test-compile
+
+nexus:
+  repositoryId: nexus-releases     # example; server id in settings.xml (URL and credentials)
+  url: https://nexus.example.com/repository/releases   # example; overrides the URL from settings.xml
+
+checks:                            # severity: off, info, warn, error
+  deps.release-missing: error
+  deps.internal-outdated: { severity: warn, allowedLag: minor }
+  deps.unreleased-upstream: info
+  deps.unresolvable: error
+  deps.convergence: warn
+  deps.internal-snapshot: error
+  deps.undeclared-internal: warn
+  git.behind: { severity: warn, maxCommits: 20, maxDays: 7 }
+  git.dirty: info
+  graph.cycle: error
+
+rebase:
+  requireCleanTree: true
+  autostash: false
+  backupRefs: true                 # refs/pmm/backup/<branch>-<timestamp> before each rebase
+  push: ask                        # never, ask, always (always --force-with-lease)
+  protectedBranches: [develop, main, master, "release/*"]   # never rebased nor force-pushed
+
+build:
+  parallelRepos: 0                 # 0 = automatic: min(4, cores / 2)
+  memoryPerBuild: 1g
+  timeoutMinutes: 15
+  cache: true                      # skip repositories whose sources did not change
+```
+
+## Building
+
+Requirements: JDK 21. The Maven wrapper downloads Maven 3.9.11; set `MVNW_REPOURL` to your Nexus mirror
+of Maven Central if the internet is not reachable.
+
+```shell
+./mvnw verify                  # Linux / macOS / Git Bash
+mvnw.cmd verify                # Windows cmd or PowerShell
+java -jar pmm-cli/target/pmm-cli-0.1.0-SNAPSHOT-all.jar --help
+```
+
+### Native executable
+
+Requirements: [GraalVM for JDK 21](https://www.graalvm.org/downloads/) with `JAVA_HOME` pointing to it.
+On Windows, native-image also needs the Visual Studio Build Tools with the *Desktop development with C++*
+workload, and the build must run from an *x64 Native Tools Command Prompt*.
+
+```shell
+./mvnw -Pnative -DskipTests package
+pmm-cli/target/pmm --version   # pmm.exe on Windows
+```
+
+CI builds the native executable on Linux and Windows for every pull request and publishes it as a
+build artifact (`pmm-Linux`, `pmm-Windows`).
+
+### Rules that keep the native build working
+
+GraalVM native images only see the classes and resources that are reachable at build time. To keep
+this cheap, the code follows three rules:
+
+- **No reflection-based data binding.** The configuration is read with Jackson's tree model and mapped
+  by hand (`ConfigParser`), which also gives precise error messages.
+- **picocli metadata is generated.** `picocli-codegen` runs as an annotation processor and writes the
+  reflection configuration for the commands.
+- **Prefer libraries without dependency injection or dynamic class loading.** For the next phases, POMs
+  will be read with `maven-model` (plain XML parsing) and Nexus queried over HTTP (`maven-metadata.xml`),
+  rather than with Maven Resolver and its Sisu/Guice container.
+
+Resources loaded at runtime must be listed in
+`pmm-cli/src/main/resources/META-INF/native-image/com.anorys.pmm/pmm-cli/resource-config.json`.
+
+## Project layout
+
+```
+pmm-core/     severities, platform helpers, process execution (Windows-aware: mvn.cmd, PATHEXT)
+pmm-config/   pmm.yaml model, loading and merging, validation, starter template
+pmm-cli/      picocli commands, exit codes, executable jar and native image
+```
+
+Modules for git, Maven, builds and reports are added in their phases.
+
+## Roadmap
+
+| Phase | Content |
+|---|---|
+| 0 | Skeleton, configuration, `init`, `config`, native build, CI on Linux and Windows |
+| 1 | Workspace model: POM scanning, repository and module graph, `pmm graph` |
+| 2 | Git status: fetch, ahead/behind, merge-base age, `pmm status` |
+| 3 | Dependency checks with Nexus, `pmm deps`, first `pmm doctor` |
+| 4 | Parallel builds, blocker analysis, fingerprint cache, `pmm build` |
+| 5 | Conflict prediction and safe rebase, `pmm sync`, `pmm rebase` |
+| 6 | HTML, JSON and JUnit XML reports; integration builds against upstream sources |

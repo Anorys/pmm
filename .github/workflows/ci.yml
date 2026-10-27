@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build and test
+        shell: bash
+        run: ./mvnw -B -ntp verify
+
+  native:
+    name: Native executable (${{ matrix.os }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            exe: pmm
+          - os: windows-latest
+            exe: pmm.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm-community
+          java-version: '21'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: maven
+      - name: Build native executable
+        shell: bash
+        run: ./mvnw -B -ntp -Pnative -DskipTests package
+      - name: Smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="$PWD/pmm-cli/target/${{ matrix.exe }}"
+          "$exe" --version
+          ws="$RUNNER_TEMP/workspace"
+          mkdir -p "$ws/core/.git" "$ws/billing/.git"
+          echo '<project/>' > "$ws/core/pom.xml"
+          echo '<project/>' > "$ws/billing/pom.xml"
+          "$exe" init "$ws"
+          "$exe" config --validate --strict --config "$ws/pmm.yaml"
+          "$exe" config --config "$ws/pmm.yaml" > /dev/null
+          set +e
+          "$exe" no-such-command
+          code=$?
+          set -e
+          test "$code" -eq 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pmm-${{ runner.os }}
+          path: pmm-cli/target/${{ matrix.exe }}
+          if-no-files-found: error
