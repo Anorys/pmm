@@ -164,7 +164,8 @@ class ConfigLoaderTest {
                 checks:
                   git.behnd: warn
                   git.dirty: loud
-                  git.behind: { maxComits: 3 }
+                  git.behind: { maxComits: 3, maxDays: soon }
+                  deps.internal-outdated: { allowedLag: some }
                 rebase:
                   push: sometimes
                 build:
@@ -181,6 +182,8 @@ class ConfigLoaderTest {
                         "checks.git.behnd is not a known check (known: " + String.join(", ", KnownChecks.ids()) + ")",
                         "checks.git.dirty must be one of off, info, warn, error (was 'loud')",
                         "checks.git.behind.maxComits is not an option of git.behind",
+                        "checks.git.behind.maxDays must be a whole number (was 'soon')",
+                        "checks.deps.internal-outdated.allowedLag must be one of none, patch, minor, major (was 'some')",
                         "rebase.push must be one of never, ask, always",
                         "build.parallelRepos must be at least 0",
                         "build.memoryPerBuild must look like 512m or 1g"));

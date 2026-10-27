@@ -12,7 +12,7 @@
 
     <artifactId>pmm-maven</artifactId>
     <name>pmm-maven</name>
-    <description>Reads the POMs of the workspace into the workspace model, without running Maven.</description>
+    <description>Reads the POMs of the workspace without running Maven, and checks dependencies against Nexus.</description>
 
     <dependencies>
         <dependency>
@@ -27,6 +27,15 @@
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-model</artifactId>
+        </dependency>
+        <!-- settings.xml (Nexus URL and credentials) and Maven's version ordering; plain classes as well. -->
+        <dependency>
+            <groupId>org.apache.maven</groupId>
+            <artifactId>maven-settings</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.maven</groupId>
+            <artifactId>maven-artifact</artifactId>
         </dependency>
     </dependencies>
 </project>

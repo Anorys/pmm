@@ -139,6 +139,8 @@
                             <mainClass>${main.class}</mainClass>
                             <buildArgs>
                                 <buildArg>--no-fallback</buildArg>
+                                <buildArg>--enable-http</buildArg>
+                                <buildArg>--enable-https</buildArg>
                                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
                             </buildArgs>
                         </configuration>

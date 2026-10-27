@@ -75,6 +75,17 @@ jobs:
           code=$?
           set -e
           test "$code" -le 2
+          # No Nexus is configured: deps and doctor skip the release checks but must run.
+          set +e
+          "$exe" deps --config "$RUNNER_TEMP/self-ws/pmm.yaml"
+          code=$?
+          set -e
+          test "$code" -le 2
+          set +e
+          "$exe" doctor --no-fetch --config "$RUNNER_TEMP/self-ws/pmm.yaml"
+          code=$?
+          set -e
+          test "$code" -le 2
           set +e
           "$exe" no-such-command
           code=$?

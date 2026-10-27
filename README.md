@@ -9,9 +9,9 @@
 
 It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and macOS) built with GraalVM, so it starts instantly and needs no installed JVM.
 
-> **Status: phase 2.** The configuration, `init`, `config`, the dependency graph (`graph`) and the git
-> status of every repository (`status`) work. The other checks (`deps`, `build`, `sync`, `rebase`,
-> `doctor`) come in the next phases; see the [roadmap](#roadmap).
+> **Status: phase 3.** The configuration, `init`, `config`, the dependency graph (`graph`), the git
+> status of every repository (`status`), the dependency checks against Nexus (`deps`) and `doctor` work.
+> Builds (`build`) and rebasing (`sync`, `rebase`) come in the next phases; see the [roadmap](#roadmap).
 
 ## Quick start
 
@@ -22,6 +22,8 @@ pmm config                # validates pmm.yaml and prints the effective configur
 pmm config --validate     # validates only; warns about repositories that are not cloned
 pmm graph                 # build order, who uses what from whom (with versions), cycles
 pmm status                # fetches every repository, then branch, ahead/behind origin/develop, local changes
+pmm deps                  # internal versions against Nexus: unreleased (blockers), SNAPSHOTs, outdated
+pmm doctor                # everything above; the command for CI
 ```
 
 `pmm` looks for `pmm.yaml` in the current directory and its parents; use `--config <file>` to point to another one.
@@ -34,10 +36,10 @@ pmm status                # fetches every repository, then branch, ahead/behind 
 | `pmm config [--validate] [--strict]` | available | Validates the configuration (all problems at once) and prints the effective values. |
 | `pmm graph [--repo <name>] [-f text\|mermaid\|dot] [--modules] [--strict]` | available | Reads the POMs and shows the build order, the artifacts and versions each repository uses from the others, and cycles. `--repo` shows what one repository depends on and what depends on it. |
 | `pmm status [--repo <name>]... [--no-fetch] [--strict]` | available | Fetches all repositories in parallel, then shows each branch, how far it is ahead of and behind its base branch, local changes and any rebase or merge in progress, with a suggestion (fast-forward or rebase) for each branch that is behind. |
-| `pmm deps` | phase 3 | Dependency checks against the POMs and Nexus. |
+| `pmm deps [--offline] [--strict]` | available | Lists every version a repository uses from another one, with the latest release in Nexus, and reports unreleased versions (what blocks whom), SNAPSHOTs, outdated releases, external versions Nexus does not have, divergent external versions, and upstream repositories with commits since their last release. |
 | `pmm build [--changed]` | phase 4 | Compiles repositories in parallel and explains what blocks what. |
 | `pmm sync`, `pmm rebase <repo>` | phase 5 | Predicts conflicts with the base branch and rebases safely. |
-| `pmm doctor` | phase 3+ | Runs every enabled check; the entry point for CI. |
+| `pmm doctor [--no-fetch] [--offline] [--strict]` | available | Runs every enabled check (cycles, git status after a fetch, dependencies); the entry point for CI. Builds join in phase 4. |
 
 Global options: `-c, --config <file>`, `-v, --verbose`, `-h, --help`, `-V, --version`.
 
@@ -92,12 +94,13 @@ nexus:
 
 checks:                            # severity: off, info, warn, error
   deps.release-missing: error
-  deps.internal-outdated: { severity: warn, allowedLag: minor }
+  deps.internal-outdated: { severity: warn, allowedLag: patch }   # tolerated lag: none, patch, minor, major
   deps.unreleased-upstream: info
   deps.unresolvable: error
   deps.convergence: warn
   deps.internal-snapshot: error
   deps.undeclared-internal: warn
+  deps.nexus-unavailable: warn     # Nexus could not be queried; release checks skipped
   git.behind: { severity: warn, maxCommits: 20, maxDays: 7 }
   git.dirty: info                  # uncommitted changes, or a rebase/merge in progress
   git.not-cloned: warn
@@ -153,9 +156,10 @@ this cheap, the code follows three rules:
   by hand (`ConfigParser`), which also gives precise error messages.
 - **picocli metadata is generated.** `picocli-codegen` runs as an annotation processor and writes the
   reflection configuration for the commands.
-- **Prefer libraries without dependency injection or dynamic class loading.** For the next phases, POMs
-  will be read with `maven-model` (plain XML parsing) and Nexus queried over HTTP (`maven-metadata.xml`),
-  rather than with Maven Resolver and its Sisu/Guice container.
+- **Prefer libraries without dependency injection or dynamic class loading.** POMs and `settings.xml`
+  are read with `maven-model` and `maven-settings` (plain XML parsing), versions are compared with
+  `maven-artifact`, and Nexus is queried with the JDK HTTP client (`maven-metadata.xml`), rather than
+  with Maven Resolver and its Sisu/Guice container. The image is built with `--enable-http --enable-https`.
 
 Resources loaded at runtime must be listed in
 `pmm-cli/src/main/resources/META-INF/native-image/com.anorys.pmm/pmm-cli/resource-config.json`.
@@ -165,8 +169,8 @@ Resources loaded at runtime must be listed in
 ```
 pmm-core/     severities, platform helpers, process execution (Windows-aware: mvn.cmd, PATHEXT)
 pmm-config/   pmm.yaml model, loading and merging, validation, starter template
-pmm-maven/    reads the POMs of the workspace into the workspace model (no Maven run)
-pmm-git/      git through the git command line: fetch, status, ahead/behind, freshness checks
+pmm-maven/    reads the POMs into the workspace model (no Maven run); dependency checks against Nexus
+pmm-git/      git through the git command line: fetch, status, ahead/behind, freshness, unreleased commits
 pmm-cli/      picocli commands, renderers, exit codes, executable jar and native image
 ```
 
@@ -182,6 +186,38 @@ with a `git.fetch-failed` finding instead of hanging, and the status then uses t
 "Behind" counts the commits of the base branch missing from `HEAD`; its age is the commit date of the
 oldest missing one. A branch is flagged (`git.behind` severity) once it is `maxCommits` behind or that
 commit is `maxDays` old; a smaller lag is reported as information only.
+
+### How dependencies are checked
+
+`pmm deps` reads the versions from the POMs (see below) and asks Nexus which versions exist, by
+downloading `<group>/<artifact>/maven-metadata.xml`: one small HTTP request per artifact, eight at a
+time, no Maven run and no local repository involved.
+
+| Check | Reports |
+|---|---|
+| `deps.release-missing` | A repository uses an internal version that Nexus does not have: its build fails until the producer releases it. The suggestion names who must release what (`release platform-core 3.1.5 (it is at 3.1.5-SNAPSHOT)`). |
+| `deps.internal-snapshot` | A repository uses a SNAPSHOT of another one. |
+| `deps.internal-outdated` | A newer internal release exists and the gap is larger than `allowedLag` (`patch` by default: 3.1.4 → 3.1.6 is tolerated, 3.1.4 → 3.2.0 is reported). |
+| `deps.unreleased-upstream` | A repository that others use has commits on its base branch since its latest release. |
+| `deps.undeclared-internal` | An artifact of an `internalGroups` group that no monitored repository produces. |
+| `deps.unresolvable` | An external version that Nexus does not have, for artifacts Nexus knows. Point `nexus` at a group repository that proxies Maven Central for this check to cover third-party libraries. |
+| `deps.convergence` | Repositories declare different versions of the same external artifact. |
+
+**Nexus URL and credentials.** `nexus.url` gives the repository URL directly. Otherwise
+`nexus.repositoryId` names a `<mirror>` (or a repository in a `<profile>`) of your `settings.xml`, and
+the `<server>` with the same id gives the credentials (`${env.NAME}` values are supported). Passwords
+encrypted with `mvn --encrypt-password` cannot be read: set `PMM_NEXUS_USERNAME` and
+`PMM_NEXUS_PASSWORD` instead, which also override `settings.xml`. `--offline` (or `maven.offline: true`)
+skips Nexus; the checks that do not need it still run.
+
+If Nexus uses a certificate signed by an internal CA, the native executable needs that CA's trust
+store at run time: `pmm -Djavax.net.ssl.trustStore=C:\path\to\cacerts -Djavax.net.ssl.trustStorePassword=changeit deps`.
+
+**Finding the latest release in git.** For `deps.unreleased-upstream`, the release commit of the
+latest release is found from `releaseTagPattern` when set, else from a tag that ends with the version
+(`v3.1.4`, `platform-core-3.1.4`), else from the oldest commit whose root `pom.xml` gained
+`<version>3.1.4</version>`. Commits whose message contains `[maven-release-plugin]` and merge commits
+are not counted. `pmm deps` uses the last fetched state; `pmm doctor` and `pmm status` fetch first.
 
 ### How the POMs are read
 
@@ -199,7 +235,7 @@ read: a version that only it defines is reported as a warning instead of being g
 | 0 | Skeleton, configuration, `init`, `config`, native build, CI on Linux and Windows |
 | 1 | Workspace model: POM scanning, repository and module graph, `pmm graph` |
 | 2 | Git status: fetch, ahead/behind, merge-base age, `pmm status` |
-| 3 | Dependency checks with Nexus, `pmm deps`, first `pmm doctor` |
+| 3 | Dependency checks with Nexus, `pmm deps`, `pmm doctor` |
 | 4 | Parallel builds, blocker analysis, fingerprint cache, `pmm build` |
 | 5 | Conflict prediction and safe rebase, `pmm sync`, `pmm rebase` |
 | 6 | HTML, JSON and JUnit XML reports; integration builds against upstream sources |

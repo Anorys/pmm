@@ -72,6 +72,37 @@ public final class GitClient {
                 .map(line -> OffsetDateTime.parse(line.trim()).toInstant());
     }
 
+    /** All tag names. */
+    public List<String> tags() {
+        return check(run(LOCAL_TIMEOUT, "tag", "--list"), "tag --list").lines().stream()
+                .map(String::trim).filter(l -> !l.isEmpty()).toList();
+    }
+
+    /** The commit {@code ref} points to (peeling tags), if it exists. */
+    public Optional<String> commitOf(String ref) {
+        ProcessResult result = run(LOCAL_TIMEOUT, "rev-parse", "--verify", "--quiet", ref + "^{commit}");
+        return result.succeeded() ? Optional.of(lastLine(result)) : Optional.empty();
+    }
+
+    /** True when {@code ancestor} is reachable from {@code ref}. */
+    public boolean isAncestor(String ancestor, String ref) {
+        return run(LOCAL_TIMEOUT, "merge-base", "--is-ancestor", ancestor, ref).succeeded();
+    }
+
+    /** The oldest commit of {@code ref} whose diff of {@code path} adds or removes a line matching {@code regex}. */
+    public Optional<String> oldestCommitChanging(String ref, String path, String regex) {
+        ProcessResult result = check(run(LOCAL_TIMEOUT, "log", "--reverse", "--format=%H", "-G" + regex, ref, "--", path),
+                "log -G " + regex);
+        return result.lines().stream().map(String::trim).filter(l -> l.matches("[0-9a-f]{40,64}")).findFirst();
+    }
+
+    /** Non-merge commits of {@code range} whose message does not contain {@code excludedMessage}. */
+    public int countCommits(String range, String excludedMessage) {
+        ProcessResult result = check(run(LOCAL_TIMEOUT, "rev-list", "--count", "--no-merges", "--fixed-strings",
+                "--invert-grep", "--grep=" + excludedMessage, range), "rev-list --count " + range);
+        return Integer.parseInt(lastLine(result));
+    }
+
     /** The operation git is in the middle of, read from the git directory. */
     public Operation operationInProgress() {
         ProcessResult result = run(LOCAL_TIMEOUT, "rev-parse", "--absolute-git-dir");

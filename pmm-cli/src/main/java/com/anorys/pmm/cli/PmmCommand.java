@@ -18,7 +18,8 @@ import java.util.List;
         mixinStandardHelpOptions = true,
         versionProvider = VersionProvider.class,
         description = "Health checks for a multi-repository Maven workspace: dependencies, builds, blockers and branch freshness.",
-        subcommands = {InitCommand.class, ConfigCommand.class, GraphCommand.class, StatusCommand.class, HelpCommand.class},
+        subcommands = {InitCommand.class, ConfigCommand.class, GraphCommand.class, StatusCommand.class,
+                DepsCommand.class, DoctorCommand.class, HelpCommand.class},
         exitCodeListHeading = "%nExit codes:%n",
         exitCodeList = {
                 "0:healthy",

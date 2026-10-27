@@ -163,7 +163,13 @@ final class ConfigParser {
                     severity = parsed;
                 }
             } else if (KnownChecks.options(id).contains(key)) {
-                options.put(key, option.getValue().asText());
+                String text = option.getValue().asText();
+                String problem = KnownChecks.validateOption(key, text);
+                if (problem != null) {
+                    s.problem(key, problem);
+                } else {
+                    options.put(key, text);
+                }
             } else {
                 s.problem(key, "is not an option of " + id);
             }
