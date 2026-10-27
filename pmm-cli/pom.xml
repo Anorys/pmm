@@ -28,6 +28,10 @@
             <artifactId>pmm-config</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.anorys.pmm</groupId>
+            <artifactId>pmm-maven</artifactId>
+        </dependency>
+        <dependency>
             <groupId>info.picocli</groupId>
             <artifactId>picocli</artifactId>
         </dependency>
