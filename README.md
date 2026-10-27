@@ -14,6 +14,16 @@ It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and
 > parallel builds (`build`), conflict prediction and safe rebasing (`sync`, `rebase`), and `doctor` with
 > JSON, JUnit XML and HTML reports for CI. See the [roadmap](#roadmap) for what could come next.
 
+## Download
+
+Each [release](https://github.com/aureg/project-modules-manager/releases) has the native executables:
+`pmm-<version>-windows-x64.exe` and `pmm-<version>-linux-x64`, with their SHA-256 in `SHA256SUMS`.
+Rename the one for your system to `pmm.exe` (or `pmm`) and put it on your `PATH`. There is no macOS
+build yet: [build it from source](#building).
+
+To publish a release, push a tag `vX.Y.Z` on `main`: the Release workflow builds the executables at
+version X.Y.Z and attaches them to a new GitHub release.
+
 ## Quick start
 
 ```shell
