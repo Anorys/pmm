@@ -68,9 +68,7 @@ public class GraphCommand implements Callable<Integer> {
         });
         out.flush();
 
-        for (String warning : scan.warnings()) {
-            err.println(spec.commandLine().getColorScheme().text("@|yellow warning:|@ ") + warning);
-        }
+        ScanWarnings.print(spec.commandLine(), scan.warnings());
         List<Set<String>> cycles = workspace.repositoryGraph().cycles();
         CheckSetting cycleCheck = config.check(KnownChecks.GRAPH_CYCLE);
         if (!cycles.isEmpty() && cycleCheck.enabled()) {

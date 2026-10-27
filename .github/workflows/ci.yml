@@ -69,6 +69,23 @@ jobs:
           "$exe" init "$RUNNER_TEMP/self-ws"
           "$exe" graph --config "$RUNNER_TEMP/self-ws/pmm.yaml"
           "$exe" graph -f mermaid --modules --config "$RUNNER_TEMP/self-ws/pmm.yaml"
+          # status may report findings (exit 0-2) on a CI checkout, but must not fail to run (exit 3).
+          set +e
+          "$exe" status --config "$RUNNER_TEMP/self-ws/pmm.yaml"
+          code=$?
+          set -e
+          test "$code" -le 2
+          # No Nexus is configured: deps and doctor skip the release checks but must run.
+          set +e
+          "$exe" deps --config "$RUNNER_TEMP/self-ws/pmm.yaml"
+          code=$?
+          set -e
+          test "$code" -le 2
+          set +e
+          "$exe" doctor --no-fetch --config "$RUNNER_TEMP/self-ws/pmm.yaml"
+          code=$?
+          set -e
+          test "$code" -le 2
           set +e
           "$exe" no-such-command
           code=$?

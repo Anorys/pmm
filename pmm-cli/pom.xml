@@ -32,6 +32,10 @@
             <artifactId>pmm-maven</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.anorys.pmm</groupId>
+            <artifactId>pmm-git</artifactId>
+        </dependency>
+        <dependency>
             <groupId>info.picocli</groupId>
             <artifactId>picocli</artifactId>
         </dependency>
@@ -135,6 +139,8 @@
                             <mainClass>${main.class}</mainClass>
                             <buildArgs>
                                 <buildArg>--no-fallback</buildArg>
+                                <buildArg>--enable-http</buildArg>
+                                <buildArg>--enable-https</buildArg>
                                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
                             </buildArgs>
                         </configuration>
