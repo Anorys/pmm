@@ -25,7 +25,6 @@ import com.anorys.pmm.tui.theme.Theme;
 import com.anorys.pmm.tui.theme.Tone;
 import com.anorys.pmm.tui.view.DashboardView;
 import com.anorys.pmm.tui.view.Format;
-import dev.tamboui.backend.jline3.JLineBackend;
 import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.tui.TuiRunner;
 import dev.tamboui.tui.event.Event;
@@ -81,9 +80,9 @@ public final class PmmDashboard {
     /** Runs until the user quits. */
     public void run() throws Exception {
         // The backend is named rather than discovered, so that the native image needs no service lookup.
-        // The terminal is opened here, not by the backend, which would settle for a dumb terminal.
+        // The terminal is opened here, not by TamboUI's backend, which would settle for a dumb terminal.
         try (Terminal terminal = SystemTerminal.open();
-             TuiRunner tui = TuiRunner.create(TuiConfig.builder().backend(new JLineBackend(terminal)).tickRate(TICK).build())) {
+             TuiRunner tui = TuiRunner.create(TuiConfig.builder().backend(new ConsoleBackend(terminal)).tickRate(TICK).build())) {
             runner = tui;
             tui.setWindowTitle("pmm");
             poller.scheduleWithFixedDelay(this::pollLogs, 400, 400, TimeUnit.MILLISECONDS);
