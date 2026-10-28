@@ -16,7 +16,7 @@ It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and
 
 ## Download
 
-Each [release](https://github.com/aureg/project-modules-manager/releases) has the native executables:
+Each [release](https://github.com/anorys/pmm/releases) has the native executables:
 `pmm-<version>-windows-x64.exe` and `pmm-<version>-linux-x64`, with their SHA-256 in `SHA256SUMS`.
 Rename the one for your system to `pmm.exe` (or `pmm`) and put it on your `PATH`. There is no macOS
 build yet: [build it from source](#building).
@@ -53,7 +53,7 @@ given version (also an older one); `--force` reinstalls. It works with the nativ
 - **Corporate network**: set `HTTPS_PROXY`, or pass `-Dhttps.proxyHost=... -Dhttps.proxyPort=...` to the
   executable; an internal certificate authority goes in a trust store given with
   `-Djavax.net.ssl.trustStore=...`. `PMM_UPDATE_URL` points to a mirror of the GitHub releases API
-  (default `https://api.github.com/repos/aureg/project-modules-manager/releases`).
+  (default `https://api.github.com/repos/anorys/pmm/releases`).
 
 ## Quick start
 

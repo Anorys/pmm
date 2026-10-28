@@ -35,7 +35,7 @@ import java.util.stream.Stream;
  */
 public final class GitHubReleases implements ReleaseSource {
 
-    public static final String DEFAULT_API = "https://api.github.com/repos/aureg/project-modules-manager/releases";
+    public static final String DEFAULT_API = "https://api.github.com/repos/anorys/pmm/releases";
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Duration DOWNLOAD_TIMEOUT = Duration.ofMinutes(10);
