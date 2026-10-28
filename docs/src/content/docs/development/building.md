@@ -43,9 +43,10 @@ this cheap, the code follows these rules:
   with Maven Resolver and its Sisu/Guice container. The image is built with
   `--enable-http --enable-https`.
 - **No virtual threads.** They crash the Windows executable when it starts processes.
-- **The dashboard uses TamboUI's immediate-mode layers only** (`tamboui-tui`, `tamboui-widgets` and the
-  JLine 3 backend, created directly rather than discovered), not its toolkit, CSS or annotation-driven
-  bindings. JLine ships its own native-image metadata, including the JNI terminal provider used on
+- **The dashboard uses TamboUI's immediate-mode layers only** (`tamboui-tui` and `tamboui-widgets`),
+  not its toolkit, CSS or annotation-driven bindings. It draws through `ConsoleBackend`, a copy of
+  TamboUI's JLine 3 backend that buffers each frame: JLine's Windows console writer is unbuffered, so
+  TamboUI's backend made one console call per cell, which showed as a sweep and made the dashboard lag. JLine ships its own native-image metadata, including the JNI terminal provider used on
   Windows; it is pinned to 3.30.6 because the 3.25.1 that TamboUI brings has broken JNI metadata,
   which left `pmm ui` on a dumb terminal on Windows. The dashboard opens the terminal itself and
   refuses a dumb one, and `pmm ui --check-terminal` (hidden, used by the native smoke test) checks

@@ -45,9 +45,10 @@
             <groupId>dev.tamboui</groupId>
             <artifactId>tamboui-widgets</artifactId>
         </dependency>
+        <!-- Drawn through ConsoleBackend, TamboUI's JLine 3 backend with buffered output. -->
         <dependency>
-            <groupId>dev.tamboui</groupId>
-            <artifactId>tamboui-jline3-backend</artifactId>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
         </dependency>
         <!-- Compile-time only: the native-image substitution in com.anorys.pmm.tui.nativeimage. -->
         <dependency>
