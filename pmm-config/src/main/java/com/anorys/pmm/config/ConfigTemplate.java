@@ -39,7 +39,7 @@ public final class ConfigTemplate {
     public static String render(List<DiscoveredRepository> repositories, String baseBranch) {
         StringBuilder yaml = new StringBuilder();
         yaml.append("""
-                # pmm configuration. Reference: https://github.com/aureg/project-modules-manager#configuration
+                # pmm configuration. Reference: https://github.com/anorys/pmm#configuration
                 # Personal overrides (local paths, disabled repositories) go in pmm.local.yaml next to this file.
 
                 workspace:
