@@ -29,12 +29,6 @@ pmm --version
 
 There is no macOS build yet: [build it from source](../../development/building/).
 
-:::note[Private repository]
-While the repository is private, downloading a release needs a GitHub account with access to it.
-`pmm self-update` uses your git credentials, so after the first download you never have to come back
-to the releases page.
-:::
-
 ### Requirements
 
 - `git` 2.38 or later on the `PATH` (`pmm` runs git for the status, conflict prediction and rebasing).
@@ -70,10 +64,10 @@ It works with the native executable, not with the jar.
   in `%LOCALAPPDATA%\pmm\update-check.properties` (`~/.cache/pmm/` elsewhere).
 - **When it does not**: in CI (`CI` is set), when the output is not a terminal (scripts, pipes), for
   development builds (`-SNAPSHOT`), with `--no-update-check`, or with `PMM_NO_UPDATE_CHECK=1`.
-- **Private repository**: GitHub only answers authenticated requests. `pmm` uses `PMM_GITHUB_TOKEN`,
-  `GH_TOKEN` or `GITHUB_TOKEN` when set, and otherwise the credentials git already stores for
-  `github.com` (`git credential fill`, for example the Git Credential Manager on Windows), without ever
-  prompting. The token is only sent to `api.github.com`, never to the storage host downloads are
+- **GitHub credentials**: none are needed, the repository is public. When `PMM_GITHUB_TOKEN`, `GH_TOKEN`
+  or `GITHUB_TOKEN` is set, or git already stores credentials for `github.com` (`git credential fill`, for
+  example the Git Credential Manager on Windows), `pmm` uses them, which raises GitHub's rate limit; it
+  never prompts. The token is only sent to `api.github.com`, never to the storage host downloads are
   redirected to.
 - **Corporate network**: set `HTTPS_PROXY`, or pass `-Dhttps.proxyHost=... -Dhttps.proxyPort=...` to
   the executable; an internal certificate authority goes in a trust store given with
