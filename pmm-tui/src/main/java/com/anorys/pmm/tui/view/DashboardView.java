@@ -4,9 +4,12 @@ import com.anorys.pmm.tui.model.DashboardState;
 import com.anorys.pmm.tui.model.DashboardState.Dialog;
 import com.anorys.pmm.tui.model.DashboardState.DialogLine;
 import com.anorys.pmm.tui.model.DashboardState.Toast;
+import com.anorys.pmm.tui.model.Menu;
+import com.anorys.pmm.tui.theme.Tone;
 import com.anorys.pmm.tui.theme.Theme;
 import dev.tamboui.layout.Rect;
 import dev.tamboui.terminal.Frame;
+import dev.tamboui.text.Line;
 import dev.tamboui.text.Span;
 
 import java.time.Instant;
@@ -48,6 +51,8 @@ public final class DashboardView {
         FooterView.render(paint, new Rect(area.x(), area.bottom() - 1, area.width(), 1), state);
         if (state.dialog() != null) {
             dialog(paint, area, state.dialog());
+        } else if (state.menu() != null) {
+            menu(paint, area, state.menu());
         } else if (state.help()) {
             help(paint, area);
         }
@@ -87,6 +92,83 @@ public final class DashboardView {
         paint.spans(inner.x(), inner.bottom() - 1, inner.width(), keys);
     }
 
+    /** A list to pick from: header, optional filter, rows, the selected row described, then the keys. */
+    private void menu(Paint paint, Rect screen, Menu menu) {
+        List<Menu.Item> items = menu.visible();
+        int labelWidth = Math.max(14, items.stream().mapToInt(i -> i.label().length()).max().orElse(14) + 2);
+        int noteWidth = Math.max(8, items.stream().mapToInt(i -> i.note() == null ? 0 : i.note().length()).max().orElse(8) + 2);
+        int hintsWidth = menu.hints().stream().mapToInt(h -> h.key().length() + h.label().length() + 5).sum();
+        int content = Math.max(Math.max(64, hintsWidth), Math.max(menu.header().stream().mapToInt(l -> Math.min(90, l.text().length())).max().orElse(0),
+                labelWidth + noteWidth + 4 + items.stream().mapToInt(i -> i.detail() == null ? 0 : i.detail().length()).max().orElse(0)));
+        int width = Math.min(screen.width() - 8, Math.min(120, content + 6));
+        List<DialogLine> description = new ArrayList<>();
+        for (DialogLine line : menu.description()) {
+            Paint.wrap(line.text(), width - 6).forEach(text -> description.add(new DialogLine(line.tone(), text)));
+        }
+        List<DialogLine> header = new ArrayList<>();
+        for (DialogLine line : menu.header()) {
+            Paint.wrap(line.text(), width - 6).forEach(text -> header.add(new DialogLine(line.tone(), text)));
+        }
+        int fixed = header.size() + (menu.filterable() ? 2 : 1) + 1 + Math.max(3, description.size()) + 4;
+        int rows = Math.max(1, Math.min(Math.max(1, items.size()), Math.min(12, screen.height() - 4 - fixed)));
+        int height = Math.min(screen.height() - 4, fixed + rows);
+        Rect area = new Rect(screen.x() + (screen.width() - width) / 2, screen.y() + (screen.height() - height) / 2, width, height);
+        Rect inner = modal(paint, area, menu.title());
+        int y = inner.y() + 1;
+        for (DialogLine line : header) {
+            paint.text(inner.x(), y++, Paint.ellipsis(line.text(), inner.width()),
+                    line.tone() == null ? theme.text() : theme.state(line.tone()), inner.width());
+        }
+        if (menu.filterable()) {
+            paint.spans(inner.x(), y++, inner.width(),
+                    Span.styled(theme.glyphs().unicode() ? "⌕ " : "> ", theme.fg(Theme.ACCENT)),
+                    Span.styled(menu.filter(), theme.fg(Theme.TEXT).bold()),
+                    Span.styled(theme.glyphs().unicode() ? "▏" : "_", theme.fg(Theme.SPARK)),
+                    Span.styled(menu.filter().isEmpty() ? "type to filter" : "", theme.muted()));
+        }
+        y++;
+        int selected = menu.selectedIndex();
+        int offset = Math.max(0, selected - rows + 1);
+        if (items.isEmpty()) {
+            paint.text(inner.x() + 2, y, menu.filterable() && !menu.filter().isBlank()
+                    ? "no match; enter creates " + menu.filter().trim() : "nothing to choose", theme.subtext(), inner.width() - 2);
+        }
+        for (int i = offset; i < items.size() && i - offset < rows; i++) {
+            Menu.Item item = items.get(i);
+            int row = y + i - offset;
+            boolean isSelected = i == selected;
+            if (isSelected) {
+                paint.buffer().setStyle(new Rect(inner.x() - 1, row, inner.width() + 2, 1), theme.selection());
+                paint.text(inner.x() - 1, row, theme.glyphs().marker(), theme.fg(Theme.SPARK), 1);
+            }
+            Tone tone = item.tone() == null ? Tone.IDLE : item.tone();
+            paint.text(inner.x() + 1, row, theme.glyphs().symbol(tone), theme.state(tone), 2);
+            paint.text(inner.x() + 3, row, Paint.pad(item.label(), labelWidth),
+                    !item.enabled() ? theme.muted() : isSelected ? theme.fg(Theme.TEXT).bold() : theme.text(), labelWidth);
+            int detailWidth = inner.width() - 3 - labelWidth - noteWidth;
+            if (item.detail() != null && detailWidth > 4) {
+                paint.text(inner.x() + 3 + labelWidth, row, Paint.ellipsis(item.detail(), detailWidth - 1), theme.subtext(), detailWidth - 1);
+            }
+            if (item.note() != null && !item.note().isEmpty()) {
+                paint.right(inner.x(), row, inner.width(), Line.from(Span.styled(item.note(), theme.state(tone))));
+            }
+        }
+        y += rows + 1;
+        paint.text(inner.x(), y - 1, (theme.glyphs().unicode() ? "─" : "-").repeat(inner.width()), theme.fg(Theme.SURFACE1), inner.width());
+        for (DialogLine line : description) {
+            if (y >= inner.bottom() - 2) {
+                break;
+            }
+            paint.text(inner.x(), y++, Paint.ellipsis(line.text(), inner.width()),
+                    line.tone() == null ? theme.text() : theme.state(line.tone()), inner.width());
+        }
+        List<Span> keys = new ArrayList<>();
+        for (Menu.Hint hint : menu.hints()) {
+            keys.addAll(theme.keyChip(hint.key(), hint.label()));
+        }
+        paint.spans(inner.x(), inner.bottom() - 1, inner.width(), keys);
+    }
+
     private void help(Paint paint, Rect screen) {
         String[][] keys = {
                 {"↑ ↓  j k", "select a repository"},
@@ -94,7 +176,10 @@ public final class DashboardView {
                 {"f", "fetch every repository and refresh git"},
                 {"b", "build all (skips unchanged repositories)"},
                 {"B", "build the selected one, without the cache"},
-                {"r", "rebase the selected branch (asks first)"},
+                {"u", "update the branch: ff, merge, rebase or reset"},
+                {"r", "the same, from the base branch, rebase selected"},
+                {"U", "fast-forward every branch behind its upstream"},
+                {"s", "switch branch (park or carry your changes)"},
                 {"d", "check the dependencies against Nexus again"},
                 {"enter", "follow the selected repository's build"},
                 {"?", "show or hide this help"},

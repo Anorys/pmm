@@ -88,10 +88,11 @@ public final class DemoWorkspace {
                 new AheadBehind(repo.ahead(), repo.behind()), since, null, null);
     }
 
-    /** The same repository after a rebase onto origin/develop. */
-    public static RepositoryStatus rebased(RepositoryStatus status) {
-        return new RepositoryStatus(status.name(), status.path(), status.baseRef(), status.tree(),
-                new AheadBehind(status.ahead(), 0), null, null, null);
+    /** The same repository on {@code branch}, {@code ahead} and {@code behind} origin/develop. */
+    public static RepositoryStatus withBranch(RepositoryStatus status, String branch, int ahead, int behind, int changes) {
+        WorkingTreeStatus tree = new WorkingTreeStatus(branch, "origin/" + branch, 0, 0, changes, 0, 0, Operation.NONE);
+        return new RepositoryStatus(status.name(), status.path(), status.baseRef(), tree, new AheadBehind(ahead, behind),
+                behind > 0 ? status.behindSince() : null, null, null);
     }
 
     public static List<Finding> gitFindings(String name) {

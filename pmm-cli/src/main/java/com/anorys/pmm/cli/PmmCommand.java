@@ -21,7 +21,7 @@ import java.util.concurrent.Callable;
         description = "Health checks for a multi-repository Maven workspace: dependencies, builds, blockers and branch freshness.",
         subcommands = {InitCommand.class, ConfigCommand.class, GraphCommand.class, StatusCommand.class,
                 DepsCommand.class, BuildCommand.class,
-                SyncCommand.class, RebaseCommand.class, DoctorCommand.class, UiCommand.class, SelfUpdateCommand.class, HelpCommand.class},
+                SyncCommand.class, UpdateCommand.class, RebaseCommand.class, SwitchCommand.class, DoctorCommand.class, UiCommand.class, SelfUpdateCommand.class, HelpCommand.class},
         exitCodeListHeading = "%nExit codes:%n",
         exitCodeList = {
                 "0:healthy",

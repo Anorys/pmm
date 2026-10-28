@@ -2,6 +2,7 @@ package com.anorys.pmm.tui.view;
 
 import com.anorys.pmm.tui.theme.Theme;
 import dev.tamboui.buffer.Buffer;
+import dev.tamboui.buffer.Cell;
 import dev.tamboui.layout.Rect;
 import dev.tamboui.style.Color;
 import dev.tamboui.style.Style;
@@ -35,10 +36,11 @@ final class Paint {
 
     void fill(Rect area, Color background) {
         if (!area.isEmpty()) {
-            buffer.setStyle(area, theme.bg(background));
+            // A fresh cell: a modal drawn over text must not inherit its modifiers.
+            Cell blank = new Cell(" ", theme.bg(background));
             for (int y = area.top(); y < area.bottom(); y++) {
                 for (int x = area.left(); x < area.right(); x++) {
-                    buffer.set(x, y, buffer.get(x, y).symbol(" "));
+                    buffer.set(x, y, blank);
                 }
             }
         }
@@ -129,6 +131,22 @@ final class Paint {
             return s.substring(0, Math.max(0, width));
         }
         return s + " ".repeat(width - s.length());
+    }
+
+    /** Splits {@code s} into lines of at most {@code width} columns, at spaces when it can. */
+    static List<String> wrap(String s, int width) {
+        List<String> lines = new ArrayList<>();
+        String rest = s;
+        while (width > 0 && rest.length() > width) {
+            int cut = rest.lastIndexOf(' ', width);
+            if (cut <= width / 3) {
+                cut = width;
+            }
+            lines.add(rest.substring(0, cut).stripTrailing());
+            rest = "  " + rest.substring(cut).strip();
+        }
+        lines.add(rest);
+        return lines;
     }
 
     static String ellipsis(String s, int width) {

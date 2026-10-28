@@ -1,6 +1,9 @@
 package com.anorys.pmm.config;
 
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +22,7 @@ public record PmmConfig(Path file,
                         List<String> internalGroups,
                         Map<String, CheckSetting> checks,
                         RebaseConfig rebase,
+                        BranchesConfig branches,
                         BuildConfig build) {
 
     public PmmConfig {
@@ -90,12 +94,93 @@ public record PmmConfig(Path file,
     public record NexusConfig(String repositoryId, String url) {
     }
 
+    /**
+     * @param protectedBranches the branches pmm never pushes, the same list as {@link BranchesConfig#pushProtected()}
+     *                          (kept for the configurations written before {@code branches:} existed)
+     */
     public record RebaseConfig(boolean requireCleanTree, boolean autostash, boolean backupRefs, PushPolicy push,
                                List<String> protectedBranches) {
 
         public RebaseConfig {
             protectedBranches = List.copyOf(protectedBranches);
         }
+    }
+
+    /**
+     * How pmm treats branches, by glob ({@code *} within a path segment, {@code **} across them).
+     *
+     * @param pushProtected   branches pmm never pushes: their remote history is never rewritten, but the local
+     *                        copy may still be updated from the remote
+     * @param updateProtected branches pmm never changes locally: no fast-forward, merge, rebase or reset
+     * @param strategies      the default update strategy of the branches matching each glob, first match wins
+     * @param stashOnSwitch   what to do with uncommitted changes when switching branches
+     */
+    public record BranchesConfig(List<String> pushProtected, List<String> updateProtected,
+                                 Map<String, UpdateStrategy> strategies, StashMode stashOnSwitch) {
+
+        public BranchesConfig {
+            pushProtected = List.copyOf(pushProtected);
+            updateProtected = List.copyOf(updateProtected);
+            strategies = Collections.unmodifiableMap(new LinkedHashMap<>(strategies));
+        }
+    }
+
+    /** How a branch takes in the commits of another one (its upstream, or its base branch). */
+    public enum UpdateStrategy {
+        FF("ff", "fast-forward"),
+        MERGE("merge", "merge"),
+        REBASE("rebase", "rebase"),
+        RESET_SOFT("reset-soft", "reset --soft"),
+        RESET_MIXED("reset-mixed", "reset --mixed"),
+        RESET_HARD("reset-hard", "reset --hard");
+
+        private final String id;
+        private final String label;
+
+        UpdateStrategy(String id, String label) {
+            this.id = id;
+            this.label = label;
+        }
+
+        /** As written in pmm.yaml and on the command line: {@code ff}, {@code reset-hard}... */
+        public String id() {
+            return id;
+        }
+
+        public String label() {
+            return label;
+        }
+
+        public boolean reset() {
+            return this == RESET_SOFT || this == RESET_MIXED || this == RESET_HARD;
+        }
+
+        /** Moves the branch to other commits than its own: its commits are replayed or dropped. */
+        public boolean rewrites() {
+            return this == REBASE || reset();
+        }
+
+        public static UpdateStrategy parse(String text) {
+            for (UpdateStrategy strategy : values()) {
+                if (strategy.id.equalsIgnoreCase(text) || strategy.name().equalsIgnoreCase(text)) {
+                    return strategy;
+                }
+            }
+            return null;
+        }
+
+        public static String ids() {
+            return String.join(", ", Arrays.stream(values()).map(UpdateStrategy::id).toList());
+        }
+    }
+
+    /**
+     * Uncommitted changes when switching branches: {@code PARK} stashes them with the branch left and
+     * restores them when coming back to it, {@code CARRY} brings them along, {@code NEVER} refuses to switch,
+     * {@code ASK} lets the user choose (the dashboard asks; the command line refuses without a console).
+     */
+    public enum StashMode {
+        ASK, PARK, CARRY, NEVER
     }
 
     public enum PushPolicy {

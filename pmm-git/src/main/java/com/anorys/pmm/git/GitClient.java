@@ -162,6 +162,102 @@ public final class GitClient {
         check(run(LOCAL_TIMEOUT, "merge", "--ff-only", "--quiet", ref), "merge --ff-only " + ref);
     }
 
+    /** {@code git merge --ff-only}, optionally stashing uncommitted changes around it. */
+    public ProcessResult mergeFastForward(String ref, boolean autostash) {
+        return run(REBASE_TIMEOUT, "merge", "--ff-only", "--quiet", autostash ? "--autostash" : "--no-autostash", ref);
+    }
+
+    /** {@code git merge --no-edit}: a merge commit when both sides have commits; the result says whether it stopped. */
+    public ProcessResult merge(String ref, boolean autostash) {
+        return run(REBASE_TIMEOUT, "merge", "--no-edit", "--quiet", autostash ? "--autostash" : "--no-autostash", ref);
+    }
+
+    public void mergeAbort() {
+        check(run(LOCAL_TIMEOUT, "merge", "--abort"), "merge --abort");
+    }
+
+    /** {@code git reset --soft|--mixed|--hard <ref>}. */
+    public void reset(String mode, String ref) {
+        check(run(LOCAL_TIMEOUT, "reset", "--quiet", "--" + mode, ref), "reset --" + mode + " " + ref);
+    }
+
+    /** The best common ancestor of two commits, if they have one. */
+    public Optional<String> mergeBase(String a, String b) {
+        ProcessResult result = run(LOCAL_TIMEOUT, "merge-base", a, b);
+        return result.succeeded() ? Optional.of(lastLine(result)) : Optional.empty();
+    }
+
+    /** {@code git rev-list --count <range>}. */
+    public int count(String range) {
+        return Integer.parseInt(lastLine(check(run(LOCAL_TIMEOUT, "rev-list", "--count", range), "rev-list --count " + range)));
+    }
+
+    /**
+     * Saves the uncommitted changes to tracked files as a stash commit without touching the working tree
+     * ({@code git stash create}); empty when there is nothing to save.
+     */
+    public Optional<String> stashCreate() {
+        String commit = lastLine(check(run(LOCAL_TIMEOUT, "stash", "create"), "stash create"));
+        return commit.isEmpty() ? Optional.empty() : Optional.of(commit);
+    }
+
+    /** {@code git stash push --include-untracked -m <message>}. */
+    public void stashPush(String message) {
+        check(run(LOCAL_TIMEOUT, "stash", "push", "--include-untracked", "--quiet", "-m", message), "stash push");
+    }
+
+    /** The stash entries, newest first. */
+    public List<Stash> stashes() {
+        ProcessResult result = check(run(LOCAL_TIMEOUT, "stash", "list", "--format=%gd%x09%gs"), "stash list");
+        List<Stash> stashes = new ArrayList<>();
+        for (String line : result.lines()) {
+            int tab = line.indexOf('\t');
+            if (tab > 0 && line.startsWith("stash@{")) {
+                stashes.add(new Stash(line.substring(0, tab).trim(), line.substring(tab + 1).trim()));
+            }
+        }
+        return stashes;
+    }
+
+    /** {@code git stash pop <stash>}; on a conflict git keeps the stash, and the result says it failed. */
+    public ProcessResult stashPop(String stash) {
+        return run(LOCAL_TIMEOUT, "stash", "pop", "--quiet", stash);
+    }
+
+    /** {@code git switch <branch>}. */
+    public ProcessResult switchTo(String branch) {
+        return run(LOCAL_TIMEOUT, "switch", "--quiet", branch);
+    }
+
+    /** {@code git switch -c <branch> [--track] <start>}: a new local branch, tracking {@code start} when it is remote. */
+    public ProcessResult switchCreate(String branch, String start, boolean track) {
+        List<String> args = new ArrayList<>(List.of("switch", "--quiet", "-c", branch));
+        args.add(track ? "--track" : "--no-track");
+        args.add(start);
+        return run(LOCAL_TIMEOUT, args.toArray(String[]::new));
+    }
+
+    /**
+     * The local branches and the branches of {@code remote}, with their upstream and last commit date.
+     * The remote's {@code HEAD} alias is left out.
+     */
+    public List<Ref> branches(String remote) {
+        ProcessResult result = check(run(LOCAL_TIMEOUT, "for-each-ref",
+                "--format=%(refname)%09%(upstream:short)%09%(upstream:track,nobracket)%09%(committerdate:unix)%09%(HEAD)",
+                "refs/heads", "refs/remotes/" + remote), "for-each-ref");
+        List<Ref> refs = new ArrayList<>();
+        for (String line : result.lines()) {
+            String[] parts = line.split("\t", -1);
+            if (parts.length < 5 || parts[0].endsWith("/HEAD")) {
+                continue;
+            }
+            Instant date = parts[3].isBlank() ? null : Instant.ofEpochSecond(Long.parseLong(parts[3].trim()));
+            refs.add(new Ref(parts[0].trim(), parts[1].trim().isEmpty() ? null : parts[1].trim(), parts[2].trim(), date,
+                    parts[4].trim().equals("*")));
+        }
+        return refs;
+    }
+
     /** Runs {@code git rebase}; the result says whether it stopped. */
     public ProcessResult rebase(String onto, boolean autostash) {
         List<String> args = new ArrayList<>(List.of("rebase"));
@@ -239,6 +335,21 @@ public final class GitClient {
     }
 
     public record AheadBehind(int ahead, int behind) {
+    }
+
+    /** A stash entry: {@code stash@{0}} and its subject, {@code On develop: <message>}. */
+    public record Stash(String ref, String subject) {
+    }
+
+    /**
+     * A branch from {@code for-each-ref}.
+     *
+     * @param name     the full ref name, {@code refs/heads/develop} or {@code refs/remotes/origin/develop}
+     * @param upstream the tracked branch of a local branch ({@code origin/develop}), or {@code null}
+     * @param track    {@code ahead 1, behind 2}, {@code gone}, or empty when in sync
+     * @param current  the branch checked out
+     */
+    public record Ref(String name, String upstream, String track, Instant lastCommit, boolean current) {
     }
 
     public enum Operation {

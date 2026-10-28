@@ -125,9 +125,13 @@ class RebaserTest {
         Files.delete(core.resolve("wip.txt"));
 
         gitOk(core, "checkout", "--quiet", "develop");
-        Result refused = rebaser.rebase(rebaser.plan(config.repositories().get(0), false, false), false, false);
-        assertThat(refused.outcome()).isEqualTo(Outcome.REFUSED);
-        assertThat(refused.message()).isEqualTo("develop is protected (rebase.protectedBranches); it is never rebased");
+        gitOk(core, "fetch", "--quiet", "origin");
+        fixture.commit(core, "local develop work", DATE);
+        Plan develop = rebaser.plan(config.repositories().get(0), false, false);
+        assertThat(develop.allowed()).as("local commits of develop may be replayed onto origin/develop").isTrue();
+        Result rebased = rebaser.rebase(develop, false, false);
+        assertThat(rebased.outcome()).isEqualTo(Outcome.REBASED);
+        assertThat(rebaser.push(rebased)).isEqualTo("develop is push-protected (branches.pushProtected); pmm never pushes it");
 
         gitOk(core, "checkout", "--quiet", "--detach");
         assertThat(rebaser.plan(config.repositories().get(0), false, false).refusals())

@@ -73,7 +73,7 @@ class SyncRebaseCommandTest {
         assertThat(out.toString())
                 .containsPattern("core\\s+feature/PMM-142\\s+origin/develop\\s+1\\s+2\\s+rebase, no conflict expected")
                 .containsPattern("billing\\s+develop\\s+origin/develop\\s+0\\s+2\\s+fast-forward")
-                .contains("To rebase:", "  pmm rebase core", "pmm sync --fast-forward");
+                .contains("To catch up:", "  pmm rebase core", "pmm sync --fast-forward");
 
         assertThat(run("sync", "--fast-forward", "--no-fetch")).isEqualTo(ExitCodes.OK);
         assertThat(out.toString()).containsPattern("billing\\s+develop\\s+origin/develop\\s+0\\s+2\\s+fast-forwarded");
@@ -104,10 +104,57 @@ class SyncRebaseCommandTest {
     }
 
     @Test
-    void refusesToRebaseAProtectedBranch() {
-        assertThat(run("rebase", "billing")).isEqualTo(ExitCodes.ERRORS);
-        assertThat(out.toString()).contains("refused: develop is protected (rebase.protectedBranches); it is never rebased");
+    void aPushProtectedBranchIsUpdatedLocallyButNeverPushed() {
+        assertThat(run("rebase", "billing", "--push")).isEqualTo(ExitCodes.OK);
+        assertThat(out.toString())
+                .contains("rebased: develop fast-forwarded to origin/develop")
+                .contains("not pushed: develop is push-protected (branches.pushProtected)");
         assertThat(run("rebase", "nope")).isEqualTo(ExitCodes.TOOL_ERROR);
+    }
+
+    @Test
+    void updateShowsEveryStrategyThenAppliesTheChosenOne() throws IOException {
+        assertThat(run("update", "billing", "--dry-run")).isEqualTo(ExitCodes.OK);
+        assertThat(out.toString())
+                .contains("billing: develop <- origin/develop, 0 ahead, 2 behind (push-protected)")
+                .containsPattern("\\* ff\\s+moves develop forward by 2 commits of origin/develop")
+                .containsPattern("reset-soft\\s+refused: would stage the reverse");
+
+        assertThat(run("update", "billing")).isEqualTo(ExitCodes.OK);
+        assertThat(out.toString()).contains("updated: develop fast-forwarded by 2 commits of origin/develop");
+        assertThat(run("update", "billing", "--no-fetch")).isEqualTo(ExitCodes.OK);
+        assertThat(out.toString()).contains("up to date");
+
+        assertThat(run("update", "core", "--from", "base", "--strategy", "merge", "--no-push")).isEqualTo(ExitCodes.OK);
+        assertThat(out.toString()).contains("updated: 2 commits of origin/develop merged into feature/PMM-142");
+
+        Files.writeString(ws.resolve("core/feature.txt"), "changed");
+        assertThat(run("update", "core", "--from", "base", "--strategy", "reset-hard")).isEqualTo(ExitCodes.ERRORS);
+        assertThat(out.toString()).contains("confirm with --yes");
+        assertThat(run("update", "core", "--from", "base", "--strategy", "reset-hard", "--yes", "--no-push")).isEqualTo(ExitCodes.OK);
+        assertThat(out.toString()).contains("updated: feature/PMM-142 reset (hard) to origin/develop", "refs/pmm/wip/feature/PMM-142/");
+        assertThat(run("update", "core", "--strategy", "squash")).isEqualTo(ExitCodes.TOOL_ERROR);
+    }
+
+    @Test
+    void switchParksChangesAndListsBranches() throws IOException {
+        Files.writeString(ws.resolve("billing/wip.txt"), "wip");
+        assertThat(run("switch", "feature/PMM-142", "--stash", "park")).isEqualTo(ExitCodes.OK);
+        assertThat(out.toString())
+                .contains("core: already on feature/PMM-142")
+                .contains("billing: switched to feature/PMM-142 (new local branch tracking origin/feature/PMM-142)")
+                .contains("1 change parked with develop");
+
+        assertThat(run("switch", "--repo", "billing")).isEqualTo(ExitCodes.OK);
+        assertThat(out.toString()).containsPattern("billing\\s+develop\\s+origin/develop\\s+.*parked changes")
+                .containsPattern("billing\\s+\\* feature/PMM-142");
+
+        assertThat(run("switch", "develop", "--repo", "billing")).isEqualTo(ExitCodes.OK);
+        assertThat(out.toString()).contains("the changes parked with develop are back");
+        assertThat(ws.resolve("billing/wip.txt")).exists();
+
+        assertThat(run("switch", "nothing-here")).isEqualTo(ExitCodes.ERRORS);
+        assertThat(out.toString()).contains("No repository has a branch nothing-here");
     }
 
     private int run(String... args) {

@@ -95,9 +95,11 @@ workspace on one screen, refreshed in the background, with the actions one key a
 ![A build in progress](docs/src/assets/screenshots/tui-build.png)
 
 Keys: `↑` `↓` select, `1`-`4` or `Tab` switch tab, `f` fetch, `b` build everything (unchanged repositories
-come from the cache), `B` build the selected repository without the cache, `r` rebase the selected
-branch (shows the plan and the predicted conflicts, asks first, then offers the `--force-with-lease`
-push), `d` check Nexus again, `?` help, `q` quit. On start it reads the POMs and the git status, then
+come from the cache), `B` build the selected repository without the cache, `u` update the selected
+branch (a menu of fast-forward, merge, rebase and soft, mixed or hard reset, from its upstream or its
+base branch, each with what it would do), `r` the same menu from the base branch with the rebase
+selected, `U` fast-forward every branch behind its upstream, `s` switch branch (parking or carrying
+uncommitted changes, in one repository or all of them), `d` check Nexus again, `?` help, `q` quit. On start it reads the POMs and the git status, then
 fetches and queries Nexus in the background.
 
 `pmm ui --demo` opens it on a made-up workspace of nine repositories with simulated git, Nexus and
@@ -116,6 +118,8 @@ turns colors off. Its visual rules are in the [style guide](docs/src/content/doc
 | `pmm deps [--offline] [--strict]` | available | Lists every version a repository uses from another one, with the latest release in Nexus, and reports unreleased versions (what blocks whom), SNAPSHOTs, outdated releases, external versions Nexus does not have, divergent external versions, and upstream repositories with commits since their last release. |
 | `pmm build [--repo <name>]... [-j <n>] [--no-cache] [--offline] [--strict]` | available | Runs `maven.compileGoal` in every repository, `build.parallelRepos` at a time, skips repositories whose sources did not change since their last successful build, and explains each failure: the first compilation error, or the artifact missing from Nexus and the repository that must release it. |
 | `pmm sync [--repo <name>]... [--no-fetch] [--fast-forward]` | available | Fetches, then says for each repository whether its branch is up to date, can be fast-forwarded, or needs a rebase, and which files a rebase would conflict on. `--fast-forward` fast-forwards the branches that have no commit of their own and no local change. |
+| `pmm update [<repo>...] [-s <strategy>] [--from upstream\|base] [--dry-run] [--no-fetch] [--autostash] [--yes] [--[no-]push]` | available | Brings the commits of the upstream (or the base branch) into the current branch with `ff`, `merge`, `rebase`, `reset-soft`, `reset-mixed` or `reset-hard`; backup refs first, conflicts aborted, a hard reset that drops work asks first. |
+| `pmm switch [<branch>] [--repo <name>]... [--stash park\|carry\|never] [--create] [--no-restore]` | available | Switches every repository that has the branch; uncommitted changes are parked with the branch left (restored on return) or carried along. Without a branch, lists them. |
 | `pmm rebase <repo>... [--dry-run] [--no-fetch] [--autostash] [--keep-conflicts] [--[no-]push]` | available | Rebases the current branch onto its base branch, safely (see below), then pushes it with `--force-with-lease` if `rebase.push` or `--push` says so. |
 | `pmm doctor [--no-fetch] [--offline] [--build] [--strict] [--json <file>] [--junit <file>] [--html <file>]` | available | Runs every enabled check (cycles, git status after a fetch, dependencies, and the builds with `--build`); the entry point for CI. Can also write the result as JSON, JUnit XML and a self-contained HTML page. |
 | `pmm ui [--demo]` | available | Opens the interactive dashboard (see [The dashboard](#the-dashboard)); also what `pmm` alone does in a terminal. |

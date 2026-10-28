@@ -1,7 +1,6 @@
 package com.anorys.pmm.cli;
 
 import com.anorys.pmm.config.PmmConfig;
-import com.anorys.pmm.config.PmmConfig.PushPolicy;
 import com.anorys.pmm.config.PmmConfig.RepositoryConfig;
 import com.anorys.pmm.core.process.SystemProcessRunner;
 import com.anorys.pmm.git.GitException;
@@ -16,18 +15,18 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
 
-import java.io.Console;
 import java.io.PrintWriter;
 import java.time.Clock;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.Callable;
 
 @Command(name = "rebase", mixinStandardHelpOptions = true,
         description = {
-                "Rebases the current branch of each named repository onto its base branch, safely: never a protected",
-                "branch, a clean working tree (or --autostash), a backup ref before, an abort on conflicts (unless",
-                "--keep-conflicts), and a push with --force-with-lease only when allowed (rebase.push or --push)."})
+                "Rebases the current branch of each named repository onto its base branch, safely: never an",
+                "update-protected branch, never rewriting the published commits of a push-protected one, a clean",
+                "working tree (or --autostash), a backup ref before, an abort on conflicts (unless --keep-conflicts),",
+                "and a push with --force-with-lease only when allowed (rebase.push or --push), never of a push-protected",
+                "branch. For other strategies (fast-forward, merge, reset), see 'pmm update'."})
 public class RebaseCommand implements Callable<Integer> {
 
     @ParentCommand
@@ -100,19 +99,11 @@ public class RebaseCommand implements Callable<Integer> {
         String branch = result.plan().branch();
         String remote = config.workspace().remote();
         String command = "git push --force-with-lease " + remote + " " + branch;
-        boolean wanted;
-        if (push != null) {
-            wanted = push;
-        } else if (config.rebase().push() == PushPolicy.ALWAYS) {
-            wanted = true;
-        } else if (config.rebase().push() == PushPolicy.ASK && System.console() != null) {
-            out.flush();
-            Console console = System.console();
-            String answer = console.readLine("  push %s to %s with --force-with-lease? [y/N] ", branch, remote);
-            wanted = answer != null && answer.trim().toLowerCase(Locale.ROOT).startsWith("y");
-        } else {
-            wanted = false;
+        if (rebaser.isProtected(branch)) {
+            out.println("  not pushed: " + branch + " is push-protected (branches.pushProtected)");
+            return;
         }
+        boolean wanted = PushChoice.wanted(push, config, branch, out);
         if (!wanted) {
             out.println("  not pushed; to push: " + command);
             return;

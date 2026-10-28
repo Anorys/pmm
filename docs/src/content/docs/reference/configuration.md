@@ -71,7 +71,13 @@ rebase:
   autostash: false
   backupRefs: true                 # refs/pmm/backup/<branch>/<timestamp> before each rebase
   push: ask                        # never, ask, always (always --force-with-lease)
-  protectedBranches: [develop, main, master, "release/*"]   # never rebased nor force-pushed
+
+branches:
+  pushProtected: [develop, main, master, "release/*"]   # never pushed, published commits never rewritten
+  updateProtected: []              # never changed locally (no fast-forward, merge, rebase or reset)
+  strategies:                      # default of 'pmm update', first matching glob wins
+    "release/**": merge            # (default: ff on push-protected branches, rebase elsewhere)
+  stashOnSwitch: ask               # ask, park, carry or never: uncommitted changes on 'pmm switch'
 
 build:
   parallelRepos: 0                 # 0 = automatic: min(4, cores / 2)
