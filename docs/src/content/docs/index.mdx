@@ -1,0 +1,57 @@
+---
+title: pmm
+description: pmm checks the health of a workspace made of several Maven repositories, from one native executable.
+template: splash
+hero:
+  title: pmm
+  tagline: >-
+    One command to know whether your multi-repository Maven workspace is healthy: consistent
+    dependencies, releases present in Nexus, every project compiling, who blocks whom, and branches
+    rebased safely onto develop.
+  image:
+    file: ../../assets/hero-hexa.svg
+    alt: The Anorys faceted hexagon
+  actions:
+    - text: Get started
+      link: getting-started/introduction/
+      icon: right-arrow
+    - text: Download
+      link: getting-started/installation/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<CardGrid>
+	<Card title="Dependencies against Nexus" icon="puzzle">
+		Every internal version a repository uses, checked against Nexus: unreleased versions,
+		SNAPSHOTs, outdated releases, and the release that would unblock the others.
+	</Card>
+	<Card title="Parallel builds that explain themselves" icon="rocket">
+		Compiles every repository at the same time, skips what did not change, and names the
+		repository that must release what when a build is blocked.
+	</Card>
+	<Card title="Branches and safe rebasing" icon="random">
+		Ahead and behind `origin/develop`, predicted conflicts before rebasing, a backup ref, an
+		abort on conflict, and a `--force-with-lease` push only when you say so.
+	</Card>
+	<Card title="Built for CI" icon="seti:json">
+		`pmm doctor` gives one exit code and writes JSON, JUnit XML and a self-contained HTML
+		report for the CI factory.
+	</Card>
+	<Card title="A dashboard in the terminal" icon="laptop">
+		`pmm ui` shows the whole workspace on one screen, live builds included, with the actions
+		one key away.
+	</Card>
+	<Card title="One native executable" icon="approve-check">
+		Built with GraalVM: `pmm.exe` starts instantly, needs no JVM, and updates itself with
+		`pmm self-update`.
+	</Card>
+</CardGrid>
+
+![The pmm dashboard, workspace tab](../../assets/screenshots/tui-workspace.png)
+
+<CardGrid>
+	<LinkCard title="Quick start" description="From pmm init to pmm doctor in ten commands." href="getting-started/quick-start/" />
+	<LinkCard title="Configuration" description="Every key of pmm.yaml, with its default." href="reference/configuration/" />
+</CardGrid>

@@ -1,4 +1,7 @@
-# pmm TUI style guide
+---
+title: Dashboard style guide
+description: The visual rules of pmm ui, the Anorys palette in the terminal.
+---
 
 The visual rules of `pmm ui`. Every color, symbol and spacing used by the dashboard comes from
 `com.anorys.pmm.tui.theme.Theme`; views never hard-code a color. Change the theme there, and the whole

@@ -16,3 +16,8 @@ Thumbs.db
 # pmm state and personal overrides, when the tool is run inside this repository
 .pmm/
 pmm.local.yaml
+
+# Documentation site (docs/)
+node_modules/
+docs/dist/
+docs/.astro/
