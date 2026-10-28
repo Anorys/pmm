@@ -9,8 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The Anorys palette and the styles built from it; see docs/tui-style-guide.md. Views take every
- * color from here, so that {@code NO_COLOR} and the ASCII fallback apply everywhere.
+ * The Anorys palette and the styles built from it; see the style guide in
+ * docs/src/content/docs/development/tui-style-guide.md. Views take every color from here, so that
+ * {@code NO_COLOR} and the ASCII fallback apply everywhere.
  */
 public final class Theme {
 

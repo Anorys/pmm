@@ -9,6 +9,8 @@
 
 It ships as a single native executable (`pmm.exe` on Windows, `pmm` on Linux and macOS) built with GraalVM, so it starts instantly and needs no installed JVM.
 
+**Documentation: https://anorys.github.io/pmm/** (sources in [`docs/`](docs/), an Astro Starlight site).
+
 > **Status: phase 6.** Every command of the plan works: the configuration (`init`, `config`), the
 > dependency graph (`graph`), the git status (`status`), the dependency checks against Nexus (`deps`),
 > parallel builds (`build`), conflict prediction and safe rebasing (`sync`, `rebase`), and `doctor` with
@@ -79,7 +81,7 @@ pmm ui                    # the interactive dashboard (pmm alone does the same)
 `pmm ui` (or `pmm` alone, in a terminal) opens an interactive dashboard in the Anorys colors: the whole
 workspace on one screen, refreshed in the background, with the actions one key away.
 
-![The workspace tab](docs/images/tui-workspace.png)
+![The workspace tab](docs/src/assets/screenshots/tui-workspace.png)
 
 | Tab | What it shows |
 |---|---|
@@ -88,7 +90,7 @@ workspace on one screen, refreshed in the background, with the actions one key a
 | `3` Dependencies | Every internal version against Nexus, the blockers and the releases that would unblock them. |
 | `4` Graph | The repositories in build layers; what the selected one needs and what needs it. |
 
-![A build in progress](docs/images/tui-build.png)
+![A build in progress](docs/src/assets/screenshots/tui-build.png)
 
 Keys: `↑` `↓` select, `1`-`4` or `Tab` switch tab, `f` fetch, `b` build everything (unchanged repositories
 come from the cache), `B` build the selected repository without the cache, `r` rebase the selected
@@ -99,7 +101,7 @@ fetches and queries Nexus in the background.
 `pmm ui --demo` opens it on a made-up workspace of nine repositories with simulated git, Nexus and
 builds, to try it anywhere. The dashboard needs a terminal of at least 80 x 24; Windows Terminal is
 recommended on Windows. `PMM_ASCII=1` replaces the Unicode symbols for old consoles, and `NO_COLOR`
-turns colors off. Its visual rules are in the [style guide](docs/tui-style-guide.md).
+turns colors off. Its visual rules are in the [style guide](docs/src/content/docs/development/tui-style-guide.md).
 
 ## Commands
 
@@ -280,6 +282,7 @@ pmm-git/      git through the git command line: fetch, status, freshness, unrele
 pmm-build/    Maven builds in parallel, failure analysis (blockers), fingerprint cache
 pmm-tui/      the interactive dashboard, drawn with TamboUI (immediate mode, JLine backend)
 pmm-cli/      picocli commands, renderers, exit codes, executable jar and native image
+docs/         the documentation site (Astro Starlight), published to GitHub Pages
 ```
 
 `pmm-core` also holds the workspace model (repositories, modules, references between artifacts) and a
