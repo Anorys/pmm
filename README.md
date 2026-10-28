@@ -48,10 +48,12 @@ given version (also an older one); `--force` reinstalls. It works with the nativ
   `%LOCALAPPDATA%\pmm\update-check.properties` (`~/.cache/pmm/` elsewhere).
 - **When it does not**: in CI (`CI` is set), when the output is not a terminal (scripts, pipes), for
   development builds (`-SNAPSHOT`), with `--no-update-check`, or with `PMM_NO_UPDATE_CHECK=1`.
-- **Private repository**: GitHub only answers authenticated requests. `pmm` uses `PMM_GITHUB_TOKEN`,
-  `GH_TOKEN` or `GITHUB_TOKEN` when set, and otherwise the credentials git already stores for `github.com`
+- **Authentication**: none is needed, the repository is public. A token only raises GitHub's limit of
+  60 API requests an hour per address (shared by everyone behind the same corporate proxy): `pmm` sends
+  `PMM_GITHUB_TOKEN`, `GH_TOKEN` or `GITHUB_TOKEN` when set. For a private fork or mirror, when GitHub
+  answers 404 or 401 it retries once with the credentials git already stores for that host
   (`git credential fill`, for example the Git Credential Manager on Windows), without ever prompting.
-  The token is only sent to `api.github.com`, never to the storage host downloads are redirected to.
+  The token is only sent to the API host, never to the storage host downloads are redirected to.
 - **Corporate network**: set `HTTPS_PROXY`, or pass `-Dhttps.proxyHost=... -Dhttps.proxyPort=...` to the
   executable; an internal certificate authority goes in a trust store given with
   `-Djavax.net.ssl.trustStore=...`. `PMM_UPDATE_URL` points to a mirror of the GitHub releases API
