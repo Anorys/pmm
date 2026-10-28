@@ -32,6 +32,7 @@ import dev.tamboui.tui.event.Event;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
 import dev.tamboui.tui.event.TickEvent;
+import org.jline.terminal.Terminal;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -80,8 +81,9 @@ public final class PmmDashboard {
     /** Runs until the user quits. */
     public void run() throws Exception {
         // The backend is named rather than discovered, so that the native image needs no service lookup.
-        TuiConfig config = TuiConfig.builder().backend(new JLineBackend()).tickRate(TICK).build();
-        try (TuiRunner tui = TuiRunner.create(config)) {
+        // The terminal is opened here, not by the backend, which would settle for a dumb terminal.
+        try (Terminal terminal = SystemTerminal.open();
+             TuiRunner tui = TuiRunner.create(TuiConfig.builder().backend(new JLineBackend(terminal)).tickRate(TICK).build())) {
             runner = tui;
             tui.setWindowTitle("pmm");
             poller.scheduleWithFixedDelay(this::pollLogs, 400, 400, TimeUnit.MILLISECONDS);
