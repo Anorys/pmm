@@ -21,7 +21,7 @@ import java.util.concurrent.Callable;
         description = "Health checks for a multi-repository Maven workspace: dependencies, builds, blockers and branch freshness.",
         subcommands = {InitCommand.class, ConfigCommand.class, GraphCommand.class, StatusCommand.class,
                 DepsCommand.class, BuildCommand.class,
-                SyncCommand.class, RebaseCommand.class, DoctorCommand.class, UiCommand.class, HelpCommand.class},
+                SyncCommand.class, RebaseCommand.class, DoctorCommand.class, UiCommand.class, SelfUpdateCommand.class, HelpCommand.class},
         exitCodeListHeading = "%nExit codes:%n",
         exitCodeList = {
                 "0:healthy",
@@ -39,6 +39,10 @@ public class PmmCommand implements Callable<Integer> {
 
     @Option(names = {"-v", "--verbose"}, scope = ScopeType.INHERIT, description = "Print more details.")
     boolean verbose;
+
+    @Option(names = "--no-update-check", scope = ScopeType.INHERIT,
+            description = "Do not look for a newer pmm release (also: environment variable PMM_NO_UPDATE_CHECK=1).")
+    boolean noUpdateCheck;
 
     /** Without a command: the dashboard in a terminal, the usage error elsewhere (scripts, CI). */
     @Override

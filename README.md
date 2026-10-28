@@ -25,6 +25,36 @@ To publish a release, push a tag `vX.Y.Z` on `main`, or run the Release workflow
 with version X.Y.Z: it builds the executables at that version and attaches them to a new GitHub release
 `vX.Y.Z` (creating the tag if needed).
 
+### Updating
+
+When a newer release is published, any `pmm` command run in a terminal ends with a notice, the way
+pip does:
+
+```text
+A new release of pmm is available: 0.1.0 -> 0.2.0
+To update, run: pmm self-update
+```
+
+`pmm self-update` downloads the executable of the latest release for your system, checks its SHA-256
+against the release's `SHA256SUMS`, runs it once (`--version`), and only then puts it in place of the
+running one. On Windows a running `.exe` cannot be overwritten but can be renamed, so the old one becomes
+`pmm.exe.old` and the next run deletes it. `pmm self-update --check` only reports; `--to X.Y.Z` installs a
+given version (also an older one); `--force` reinstalls. It works with the native executable, not the jar.
+
+- **When it looks**: at most once a day, in the background while the command runs, with a 3-second
+  timeout. A failed lookup (offline, proxy) is silent and retried the next day. The answer is cached in
+  `%LOCALAPPDATA%\pmm\update-check.properties` (`~/.cache/pmm/` elsewhere).
+- **When it does not**: in CI (`CI` is set), when the output is not a terminal (scripts, pipes), for
+  development builds (`-SNAPSHOT`), with `--no-update-check`, or with `PMM_NO_UPDATE_CHECK=1`.
+- **Private repository**: GitHub only answers authenticated requests. `pmm` uses `PMM_GITHUB_TOKEN`,
+  `GH_TOKEN` or `GITHUB_TOKEN` when set, and otherwise the credentials git already stores for `github.com`
+  (`git credential fill`, for example the Git Credential Manager on Windows), without ever prompting.
+  The token is only sent to `api.github.com`, never to the storage host downloads are redirected to.
+- **Corporate network**: set `HTTPS_PROXY`, or pass `-Dhttps.proxyHost=... -Dhttps.proxyPort=...` to the
+  executable; an internal certificate authority goes in a trust store given with
+  `-Djavax.net.ssl.trustStore=...`. `PMM_UPDATE_URL` points to a mirror of the GitHub releases API
+  (default `https://api.github.com/repos/aureg/project-modules-manager/releases`).
+
 ## Quick start
 
 ```shell
@@ -85,8 +115,9 @@ turns colors off. Its visual rules are in the [style guide](docs/tui-style-guide
 | `pmm rebase <repo>... [--dry-run] [--no-fetch] [--autostash] [--keep-conflicts] [--[no-]push]` | available | Rebases the current branch onto its base branch, safely (see below), then pushes it with `--force-with-lease` if `rebase.push` or `--push` says so. |
 | `pmm doctor [--no-fetch] [--offline] [--build] [--strict] [--json <file>] [--junit <file>] [--html <file>]` | available | Runs every enabled check (cycles, git status after a fetch, dependencies, and the builds with `--build`); the entry point for CI. Can also write the result as JSON, JUnit XML and a self-contained HTML page. |
 | `pmm ui [--demo]` | available | Opens the interactive dashboard (see [The dashboard](#the-dashboard)); also what `pmm` alone does in a terminal. |
+| `pmm self-update [--check] [--to <version>] [--force]` | available | Replaces the executable with the latest release, after checking its SHA-256 (see [Updating](#updating)). |
 
-Global options: `-c, --config <file>`, `-v, --verbose`, `-h, --help`, `-V, --version`.
+Global options: `-c, --config <file>`, `-v, --verbose`, `--no-update-check`, `-h, --help`, `-V, --version`.
 
 ### Exit codes
 

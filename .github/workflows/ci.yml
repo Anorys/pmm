@@ -133,6 +133,23 @@ jobs:
           code=$?
           set -e
           test "$code" -eq 3
+      - name: Self-update
+        shell: bash
+        env:
+          # The repository is private: the release lookup and downloads need a token.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/self-update"
+          mkdir -p "$dir"
+          cp "pmm-cli/target/${{ matrix.exe }}" "$dir/"
+          exe="$dir/${{ matrix.exe }}"
+          "$exe" self-update --check
+          # Installs the published 0.1.1 over this build: download, SHA-256, a trial run, then the swap
+          # (on Windows, while the running executable is locked).
+          "$exe" self-update --to 0.1.1
+          "$exe" --version | tr -d '\r' | tee "$RUNNER_TEMP/updated-version.txt"
+          grep -q '^pmm 0.1.1$' "$RUNNER_TEMP/updated-version.txt"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
