@@ -31,6 +31,7 @@ jobs:
   native:
     name: Native executable (${{ matrix.os }})
     needs: test
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -123,10 +124,12 @@ jobs:
           set -e
           test "$code" -eq 3
           if [ "$RUNNER_OS" = "Linux" ]; then
-            # In a pseudo-terminal: the demo dashboard draws, builds, then quits on q.
-            (sleep 4; printf b; sleep 4; printf 2; sleep 2; printf q) \
-              | script -qfec "stty cols 140 rows 40; TERM=xterm-256color '$exe' ui --demo" /dev/null > "$RUNNER_TEMP/ui.txt"
+            # In a pseudo-terminal: the demo dashboard draws, builds, then quits on q. The build is still
+            # running then, so q asks "Quit?" and y confirms. timeout keeps a regression from hanging the job.
+            (sleep 4; printf b; sleep 4; printf 2; sleep 2; printf q; sleep 1; printf y) \
+              | timeout 120 script -qfec "stty cols 140 rows 40; TERM=xterm-256color '$exe' ui --demo" /dev/null > "$RUNNER_TEMP/ui.txt"
             grep -q "project modules manager" "$RUNNER_TEMP/ui.txt"
+            grep -q "Quit?" "$RUNNER_TEMP/ui.txt"
           fi
           set +e
           "$exe" no-such-command
