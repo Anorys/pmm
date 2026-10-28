@@ -46,7 +46,10 @@ this cheap, the code follows these rules:
 - **The dashboard uses TamboUI's immediate-mode layers only** (`tamboui-tui`, `tamboui-widgets` and the
   JLine 3 backend, created directly rather than discovered), not its toolkit, CSS or annotation-driven
   bindings. JLine ships its own native-image metadata, including the JNI terminal provider used on
-  Windows. The image has no Flight Recorder, so TamboUI's JFR draw event is initialized at build time
+  Windows; it is pinned to 3.30.6 because the 3.25.1 that TamboUI brings has broken JNI metadata,
+  which left `pmm ui` on a dumb terminal on Windows. The dashboard opens the terminal itself and
+  refuses a dumb one, and `pmm ui --check-terminal` (hidden, used by the native smoke test) checks
+  that the native library loads in the image. The image has no Flight Recorder, so TamboUI's JFR draw event is initialized at build time
   and reported as disabled by a substitution (`pmm-tui/.../nativeimage/`).
 
 Resources loaded at runtime must be listed in

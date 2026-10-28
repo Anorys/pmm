@@ -30,6 +30,8 @@
         <picocli.version>4.7.6</picocli.version>
         <jackson.version>2.17.2</jackson.version>
         <tamboui.version>0.6.0</tamboui.version>
+        <!-- Newer than the 3.25.1 TamboUI brings: its native-image JNI metadata breaks the Windows console. -->
+        <jline.version>3.30.6</jline.version>
         <maven-model.version>3.9.11</maven-model.version>
         <junit.version>5.10.3</junit.version>
         <assertj.version>3.26.3</assertj.version>
@@ -72,6 +74,11 @@
                 <groupId>com.anorys.pmm</groupId>
                 <artifactId>pmm-tui</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jline</groupId>
+                <artifactId>jline</artifactId>
+                <version>${jline.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.tamboui</groupId>

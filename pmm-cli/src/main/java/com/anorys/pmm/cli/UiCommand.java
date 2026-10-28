@@ -2,6 +2,8 @@ package com.anorys.pmm.cli;
 
 import com.anorys.pmm.config.PmmConfig;
 import com.anorys.pmm.tui.PmmDashboard;
+import com.anorys.pmm.tui.SystemTerminal;
+import com.anorys.pmm.tui.SystemTerminal.TerminalUnavailableException;
 import com.anorys.pmm.tui.demo.DemoWorkspace;
 import com.anorys.pmm.tui.service.DemoService;
 import com.anorys.pmm.tui.service.LiveWorkspace;
@@ -31,19 +33,32 @@ public class UiCommand implements Callable<Integer> {
     @Option(names = "--demo", description = "Open on a made-up workspace, with simulated git, Nexus and builds.")
     boolean demo;
 
+    @Option(names = "--check-terminal", hidden = true,
+            description = "Checks that the terminal support (JLine's native library) loads, then exits.")
+    boolean checkTerminal;
+
     @Override
     public Integer call() throws Exception {
+        if (checkTerminal) {
+            spec.commandLine().getOut().println(SystemTerminal.check());
+            return ExitCodes.OK;
+        }
         if (System.console() == null) {
             spec.commandLine().getErr().println(spec.commandLine().getColorScheme().errorText(
                     "pmm ui needs an interactive terminal; use 'pmm doctor' in scripts and CI."));
             return ExitCodes.TOOL_ERROR;
         }
         Theme theme = Theme.fromEnvironment();
-        if (demo) {
-            new PmmDashboard(new DemoService(), DemoWorkspace.root(), theme).run();
-        } else {
-            PmmConfig config = pmm.loadConfig();
-            new PmmDashboard(new LiveWorkspace(config), config.workspace().root(), theme).run();
+        try {
+            if (demo) {
+                new PmmDashboard(new DemoService(), DemoWorkspace.root(), theme).run();
+            } else {
+                PmmConfig config = pmm.loadConfig();
+                new PmmDashboard(new LiveWorkspace(config), config.workspace().root(), theme).run();
+            }
+        } catch (TerminalUnavailableException e) {
+            spec.commandLine().getErr().println(spec.commandLine().getColorScheme().errorText(e.getMessage()));
+            return ExitCodes.TOOL_ERROR;
         }
         return ExitCodes.OK;
     }

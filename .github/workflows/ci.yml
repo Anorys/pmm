@@ -58,6 +58,9 @@ jobs:
           set -euo pipefail
           exe="$PWD/pmm-cli/target/${{ matrix.exe }}"
           "$exe" --version
+          # JLine's native library must load and work in the image, or pmm ui gets a dumb terminal.
+          "$exe" ui --check-terminal | tee "$RUNNER_TEMP/terminal.txt"
+          grep -q "^jni terminal support loaded" "$RUNNER_TEMP/terminal.txt"
           ws="$RUNNER_TEMP/workspace"
           mkdir -p "$ws/core/.git" "$ws/billing/.git"
           echo '<project/>' > "$ws/core/pom.xml"
