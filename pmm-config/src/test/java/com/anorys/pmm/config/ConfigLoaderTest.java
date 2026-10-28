@@ -2,6 +2,8 @@ package com.anorys.pmm.config;
 
 import com.anorys.pmm.config.PmmConfig.PushPolicy;
 import com.anorys.pmm.config.PmmConfig.RepositoryConfig;
+import com.anorys.pmm.config.PmmConfig.StashMode;
+import com.anorys.pmm.config.PmmConfig.UpdateStrategy;
 import com.anorys.pmm.core.Platform;
 import com.anorys.pmm.core.Severity;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -44,6 +47,10 @@ class ConfigLoaderTest {
         assertThat(config.check(KnownChecks.DEPS_RELEASE_MISSING).severity()).isEqualTo(Severity.ERROR);
         assertThat(config.rebase().push()).isEqualTo(PushPolicy.ASK);
         assertThat(config.rebase().protectedBranches()).contains("develop", "release/*");
+        assertThat(config.branches().pushProtected()).containsExactly("develop", "main", "master", "release/*");
+        assertThat(config.branches().updateProtected()).isEmpty();
+        assertThat(config.branches().strategies()).isEmpty();
+        assertThat(config.branches().stashOnSwitch()).isEqualTo(StashMode.ASK);
         assertThat(config.build().parallelRepos()).isZero();
         assertThat(config.build().effectiveParallelRepos()).isBetween(1, 4);
     }
@@ -115,6 +122,51 @@ class ConfigLoaderTest {
         assertThat(config.rebase().push()).isEqualTo(PushPolicy.ALWAYS);
         assertThat(config.build().effectiveParallelRepos()).isEqualTo(3);
         assertThat(config.build().cache()).isFalse();
+    }
+
+    @Test
+    void branchRulesAndTheirOlderSpelling() throws IOException {
+        Path file = write("pmm.yaml", """
+                repositories:
+                  - name: core
+                branches:
+                  pushProtected: [main]
+                  updateProtected: ["release/**"]
+                  strategies:
+                    develop: merge
+                    "feature/*": reset-hard
+                  stashOnSwitch: park
+                """);
+        PmmConfig config = ConfigLoader.load(file);
+        assertThat(config.branches().pushProtected()).containsExactly("main");
+        assertThat(config.rebase().protectedBranches()).containsExactly("main");
+        assertThat(config.branches().updateProtected()).containsExactly("release/**");
+        assertThat(config.branches().strategies()).containsExactly(
+                Map.entry("develop", UpdateStrategy.MERGE), Map.entry("feature/*", UpdateStrategy.RESET_HARD));
+        assertThat(config.branches().stashOnSwitch()).isEqualTo(StashMode.PARK);
+        assertThat(ConfigWriter.toYaml(config)).contains("pushProtected:", "feature/*: reset-hard", "stashOnSwitch: park");
+
+        Path legacy = write("pmm.yaml", """
+                repositories:
+                  - name: core
+                rebase:
+                  protectedBranches: [develop]
+                """);
+        assertThat(ConfigLoader.load(legacy).branches().pushProtected()).containsExactly("develop");
+
+        Path wrong = write("pmm.yaml", """
+                repositories:
+                  - name: core
+                rebase:
+                  protectedBranches: [develop]
+                branches:
+                  pushProtected: [develop]
+                  strategies: { develop: squash }
+                  stashOnSwitch: sometimes
+                """);
+        assertThatThrownBy(() -> ConfigLoader.load(wrong)).hasMessageContaining("rebase.protectedBranches is the older name")
+                .hasMessageContaining("branches.strategies.develop must be one of ff, merge, rebase")
+                .hasMessageContaining("branches.stashOnSwitch must be one of ask, park, carry, never");
     }
 
     @Test

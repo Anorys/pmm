@@ -2,7 +2,14 @@ package com.anorys.pmm.tui.service;
 
 import com.anorys.pmm.build.BuildChecks.Blocker;
 import com.anorys.pmm.build.BuildResult;
+import com.anorys.pmm.config.PmmConfig.RepositoryConfig;
+import com.anorys.pmm.config.PmmConfig.StashMode;
+import com.anorys.pmm.config.PmmConfig.UpdateStrategy;
 import com.anorys.pmm.core.check.Finding;
+import com.anorys.pmm.git.BranchSwitcher;
+import com.anorys.pmm.git.BranchUpdater;
+import com.anorys.pmm.git.BranchUpdater.Target;
+import com.anorys.pmm.git.WorkingTreeStatus;
 import com.anorys.pmm.git.RepositoryStatus;
 import com.anorys.pmm.maven.DependencyChecks.InternalUsage;
 import com.anorys.pmm.maven.DependencyChecks.Report;
@@ -19,6 +26,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,6 +43,12 @@ public final class DemoService implements WorkspaceService {
 
     private final Path logs;
     private final Map<String, RepositoryStatus> statuses = new ConcurrentHashMap<>();
+    /** Commits of the upstream not pulled yet, per repository; platform-core starts with one. */
+    private final Map<String, Integer> upstreamBehind = new ConcurrentHashMap<>();
+    /** Changes parked with each branch, per repository. */
+    private final Map<String, Map<String, Integer>> parked = new ConcurrentHashMap<>();
+    /** Branches checked out during the demo, to list them afterwards. */
+    private final Map<String, List<String>> knownBranches = new ConcurrentHashMap<>();
 
     public DemoService() {
         try {
@@ -169,31 +183,83 @@ public final class DemoService implements WorkspaceService {
     }
 
     @Override
-    public RebasePlan planRebase(String repository) {
+    public List<BranchUpdater.Plan> planUpdate(String repository, boolean autostash) {
         pause(500);
-        RepositoryStatus status = statuses.computeIfAbsent(repository, n -> DemoWorkspace.status(n, Instant.now()));
-        List<String> refusals = new ArrayList<>();
-        String branch = status.tree().branch();
-        if (branch.equals("develop")) {
-            refusals.add("develop is a protected branch (rebase.protectedBranches)");
+        RepositoryStatus status = status(repository);
+        WorkingTreeStatus tree = status.tree();
+        String branch = tree.branch();
+        boolean develop = branch.equals("develop");
+        RepositoryConfig config = new RepositoryConfig(repository, status.path(), null, null, List.of("*"), true, null);
+        List<String> conflicts = repository.equals("invoicing")
+                ? List.of("invoicing-service/src/main/java/com/anorys/invoicing/PdfRenderer.java") : List.of();
+        BranchUpdater.Plan onBase = plan(config, tree, Target.BASE, status.baseRef(), status.ahead(), status.behind(),
+                develop ? 0 : status.ahead(), conflicts, develop, autostash);
+        if (develop) {
+            return List.of(onBase);
         }
-        if (!status.tree().clean()) {
-            refusals.add(status.tree().changed() + " uncommitted changes; commit or stash them first");
-        }
-        List<String> conflicts = repository.equals("invoicing") ? List.of("invoicing-service/src/main/java/com/anorys/invoicing/PdfRenderer.java") : List.of();
-        return new RebasePlan(repository, branch, status.baseRef(), status.ahead(), status.behind(), conflicts, refusals, null);
+        int behindUpstream = upstreamBehind.getOrDefault(repository, repository.equals("platform-core") ? 1 : 0);
+        return List.of(plan(config, tree, Target.UPSTREAM, tree.upstream(), 0, behindUpstream, 0, List.of(), false, autostash), onBase);
+    }
+
+    private static BranchUpdater.Plan plan(RepositoryConfig config, WorkingTreeStatus tree, Target target, String targetRef,
+                                           int ahead, int behind, int published, List<String> conflicts, boolean pushProtected,
+                                           boolean autostash) {
+        List<BranchUpdater.Option> options = BranchUpdater.options(tree.branch(), targetRef, tree.upstream(), ahead, behind,
+                published, conflicts, tree, pushProtected, autostash, true);
+        UpdateStrategy suggested = BranchUpdater.suggest(options, pushProtected ? UpdateStrategy.FF : UpdateStrategy.REBASE);
+        return new BranchUpdater.Plan(config, tree.branch(), target, targetRef, ahead, behind, published, conflicts, tree,
+                List.of(), suggested, options, autostash, pushProtected, tree.upstream(), "demo", null);
     }
 
     @Override
-    public RebaseResult rebase(RebasePlan plan) {
+    public BranchUpdater.Result update(BranchUpdater.Plan plan, UpdateStrategy strategy) {
         pause(1200);
-        if (!plan.predictedConflicts().isEmpty()) {
-            return new RebaseResult(RebaseOutcome.CONFLICTS, "conflicts; the rebase was aborted and " + plan.branch() + " is unchanged",
-                    "refs/pmm/backup/" + plan.branch() + "/demo", null);
+        String name = plan.repository().name();
+        String backup = strategy == UpdateStrategy.FF ? null : "refs/pmm/backup/" + plan.branch() + "/demo";
+        BranchUpdater.Option option = plan.option(strategy);
+        if (!option.allowed()) {
+            return new BranchUpdater.Result(BranchUpdater.Outcome.REFUSED, plan, strategy, null, null, List.of(), option.refusal());
         }
-        statuses.computeIfPresent(plan.repository(), (n, s) -> DemoWorkspace.rebased(s));
-        return new RebaseResult(RebaseOutcome.REBASED, plan.ahead() + " commits of " + plan.branch() + " replayed onto " + plan.baseRef(),
-                "refs/pmm/backup/" + plan.branch() + "/demo", null);
+        if (!plan.predictedConflicts().isEmpty() && (strategy == UpdateStrategy.MERGE || strategy == UpdateStrategy.REBASE)) {
+            return new BranchUpdater.Result(BranchUpdater.Outcome.CONFLICTS, plan, strategy, backup, null, plan.predictedConflicts(),
+                    "conflicts; the " + strategy.id() + " was aborted and " + plan.branch() + " is unchanged");
+        }
+        RepositoryStatus status = status(name);
+        if (plan.target() == Target.UPSTREAM) {
+            upstreamBehind.put(name, 0);
+            return new BranchUpdater.Result(BranchUpdater.Outcome.UPDATED, plan, strategy, backup, null, List.of(),
+                    plan.branch() + " brought up to date with " + plan.targetRef());
+        }
+        int ahead = status.ahead();
+        int changes = status.tree().changed();
+        switch (strategy) {
+            case MERGE -> ahead = ahead == 0 ? 0 : ahead + 1;
+            case RESET_SOFT, RESET_MIXED -> {
+                changes += ahead;
+                ahead = 0;
+            }
+            case RESET_HARD -> {
+                ahead = 0;
+                changes = 0;
+            }
+            default -> {
+            }
+        }
+        statuses.put(name, DemoWorkspace.withBranch(status, status.tree().branch(), ahead, 0, changes));
+        String message = switch (strategy) {
+            case FF -> plan.branch() + " fast-forwarded by " + plan.behind() + " commits of " + plan.targetRef();
+            case MERGE -> plan.behind() + " commits of " + plan.targetRef() + " merged into " + plan.branch();
+            case REBASE -> plan.ahead() + " commits of " + plan.branch() + " replayed onto " + plan.targetRef();
+            default -> plan.branch() + " reset (" + strategy.id().substring(6) + ") to " + plan.targetRef();
+        };
+        String wip = strategy == UpdateStrategy.RESET_HARD && status.tree().changed() > 0 ? "refs/pmm/wip/" + plan.branch() + "/demo" : null;
+        return new BranchUpdater.Result(BranchUpdater.Outcome.UPDATED, plan, strategy, backup, wip, List.of(), message);
+    }
+
+    @Override
+    public boolean pushable(BranchUpdater.Result result) {
+        return result.outcome() == BranchUpdater.Outcome.UPDATED && !result.plan().pushProtected()
+                && result.plan().target() == Target.BASE;
     }
 
     @Override
@@ -202,9 +268,78 @@ public final class DemoService implements WorkspaceService {
     }
 
     @Override
-    public String push(RebaseResult result) {
+    public String push(BranchUpdater.Result result) {
         pause(900);
         return null;
+    }
+
+    @Override
+    public List<BranchSwitcher.Branch> branches(String repository) {
+        pause(250);
+        String current = status(repository).tree().branch();
+        Set<String> parkedHere = parked.getOrDefault(repository, Map.of()).keySet();
+        Instant now = Instant.now();
+        List<BranchSwitcher.Branch> branches = new ArrayList<>();
+        branches.add(new BranchSwitcher.Branch(current, true, true, "origin/" + current, "", now, false));
+        List<String> locals = new ArrayList<>(List.of("develop", "feature/PMM-130-logging", "release/3.1"));
+        knownBranches.getOrDefault(repository, List.of()).forEach(b -> {
+            if (!locals.contains(b)) {
+                locals.add(b);
+            }
+        });
+        int day = 1;
+        for (String local : locals) {
+            if (!local.equals(current)) {
+                branches.add(new BranchSwitcher.Branch(local, true, false, "origin/" + local,
+                        local.startsWith("feature") ? "ahead 2" : "", now.minus(Duration.ofDays(day++)), parkedHere.contains(local)));
+            }
+        }
+        for (String remote : List.of("feature/PMM-170-api-v2", "feature/PMM-171-audit", "bugfix/PMM-165-rounding")) {
+            if (!locals.contains(remote) && !remote.equals(current)) {
+                branches.add(new BranchSwitcher.Branch(remote, false, false, "origin/" + remote, "",
+                        now.minus(Duration.ofDays(day++)), false));
+            }
+        }
+        return branches;
+    }
+
+    @Override
+    public BranchSwitcher.Result switchBranch(String repository, String branch, StashMode mode, boolean create) {
+        pause(600);
+        RepositoryStatus status = status(repository);
+        String from = status.tree().branch();
+        if (branch.equals(from)) {
+            return new BranchSwitcher.Result(BranchSwitcher.Outcome.ALREADY, repository, from, branch, null, false, null, "already on " + branch);
+        }
+        int changes = status.tree().changed();
+        Map<String, Integer> parkedHere = parked.computeIfAbsent(repository, r -> new ConcurrentHashMap<>());
+        String stashed = null;
+        if (changes > 0) {
+            if (mode == StashMode.ASK || mode == StashMode.NEVER) {
+                return new BranchSwitcher.Result(BranchSwitcher.Outcome.REFUSED, repository, from, branch, null, false, null,
+                        changes + " uncommitted changes; park them (stashed, back when you return to " + from + ") or carry them to " + branch);
+            }
+            if (mode == StashMode.PARK) {
+                parkedHere.put(from, changes);
+                stashed = changes + " changes parked with " + from;
+                changes = 0;
+            } else {
+                stashed = changes + " changes carried over";
+            }
+        }
+        Integer restored = parkedHere.remove(branch);
+        if (restored != null) {
+            changes += restored;
+        }
+        knownBranches.computeIfAbsent(repository, r -> new ArrayList<>()).add(from);
+        boolean develop = branch.equals("develop");
+        statuses.put(repository, DemoWorkspace.withBranch(status, branch, develop ? 0 : 1, develop ? 0 : 2, changes));
+        return new BranchSwitcher.Result(BranchSwitcher.Outcome.SWITCHED, repository, from, branch, stashed, restored != null, null,
+                "switched to " + branch);
+    }
+
+    private RepositoryStatus status(String repository) {
+        return statuses.computeIfAbsent(repository, n -> DemoWorkspace.status(n, Instant.now()));
     }
 
     private static void pause(long millis) {

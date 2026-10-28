@@ -33,10 +33,32 @@ the git status, then fetches and queries Nexus in the background.
 | `f` | Fetch every repository |
 | `b` | Build everything (unchanged repositories come from the cache) |
 | `B` | Build the selected repository without the cache |
-| `r` | Rebase the selected branch: shows the plan and the predicted conflicts, asks first, then offers the `--force-with-lease` push |
+| `u` | Update the selected branch: a menu of every strategy (fast-forward, merge, rebase, reset soft, mixed or hard) with what each would do; `t` switches between the upstream and the base branch, `a` turns autostash on |
+| `r` | The same menu, from the base branch, with the rebase selected |
+| `U` | Fast-forward every branch that only lacks commits of its upstream, after one confirmation |
+| `s` | Switch branch: type to filter, `Tab` for every repository at once; uncommitted changes are parked or carried |
 | `d` | Check Nexus again |
 | `?` | Help |
 | `q` | Quit |
+
+## Updating and switching branches
+
+`u` opens the update menu of the selected repository. Each strategy says what it would do, or why it
+cannot run; the one of `branches.strategies` is selected. A strategy that drops work (a hard reset)
+asks again, and after a rebase or a reset that rewrote published commits, the dashboard offers the
+`--force-with-lease` push (never for a push-protected branch). See
+[Branches, updates and switching](../rebasing/) for the rules.
+
+![The update menu](../../../assets/screenshots/tui-update.png)
+
+`s` lists the branches, local ones first, then the remote ones without a local copy. With uncommitted
+changes, it asks whether to **park** them (stashed with the branch you leave, back when you return)
+or **carry** them to the new branch. Typing a name that does not exist offers to create it from the
+base branch.
+
+![Switching branch](../../../assets/screenshots/tui-switch.png)
+
+![Fast-forwarding every repository](../../../assets/screenshots/tui-update-all.png)
 
 ## Terminal support
 

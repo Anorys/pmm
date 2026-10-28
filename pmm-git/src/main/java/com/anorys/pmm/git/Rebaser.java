@@ -17,8 +17,9 @@ import java.util.regex.Pattern;
 /**
  * Rebases the current branch of a repository onto its base branch, safely:
  * <ul>
- *   <li>never on a protected branch ({@code rebase.protectedBranches}), a detached HEAD, or while a
- *       rebase or merge is in progress;</li>
+ *   <li>never on an update-protected branch ({@code branches.updateProtected}), a detached HEAD, or while
+ *       a rebase or merge is in progress; on a push-protected branch ({@code branches.pushProtected}) only
+ *       when no commit already on its upstream would be rewritten, and it is never pushed;</li>
  *   <li>only on a clean working tree, unless {@code --autostash} (or {@code rebase.autostash});</li>
  *   <li>after saving the branch under {@code refs/pmm/backup/<branch>/<timestamp>}, so it can be undone;</li>
  *   <li>on conflicts the rebase is aborted (the branch is back where it was) unless asked to keep it;</li>
@@ -61,9 +62,11 @@ public final class Rebaser {
     private final PmmConfig config;
     private final ProcessRunner runner;
     private final Clock clock;
+    private final BranchProtection protection;
 
     public Rebaser(PmmConfig config, ProcessRunner runner, Clock clock) {
         this.config = config;
+        this.protection = new BranchProtection(config);
         this.runner = runner;
         this.clock = clock;
     }
@@ -93,8 +96,8 @@ public final class Rebaser {
         String branch = tree.branch();
         if (branch == null) {
             refusals.add("HEAD is detached; check out a branch first");
-        } else if (isProtected(branch)) {
-            refusals.add(branch + " is protected (rebase.protectedBranches); it is never rebased");
+        } else if (protection.updateProtected(branch)) {
+            refusals.add(branch + " is update-protected (branches.updateProtected); pmm never changes it locally");
         }
         if (tree.operation() != Operation.NONE) {
             refusals.add("a " + tree.operation().name().toLowerCase(Locale.ROOT).replace('_', '-')
@@ -107,6 +110,14 @@ public final class Rebaser {
             return new Plan(repository, branch, baseRef, 0, 0, null, refusals, tree.upstream(), null, fetchError);
         }
         GitClient.AheadBehind vsBase = git.aheadBehind(baseRef, "HEAD");
+        if (branch != null && protection.pushProtected(branch)) {
+            int published = BranchUpdater.publishedCommitsRewritten(git, baseRef, tree.upstream());
+            if (published > 0) {
+                refusals.add(branch + " is push-protected (branches.pushProtected) and " + published + " of its commits to replay "
+                        + (published == 1 ? "is" : "are") + " already on " + tree.upstream()
+                        + "; a rebase would rewrite its published history");
+            }
+        }
         List<String> conflicts = vsBase.behind() > 0 && vsBase.ahead() > 0
                 ? git.predictConflicts(baseRef, "HEAD").orElse(null) : List.of();
         String upstreamCommit = tree.upstream() != null && git.exists(tree.upstream()) ? git.revParse(tree.upstream()) : null;
@@ -131,8 +142,9 @@ public final class Rebaser {
         }
         ProcessResult result = git.rebase(plan.baseRef(), autostash || config.rebase().autostash());
         if (result.succeeded()) {
-            return new Result(Outcome.REBASED, plan, backupRef, before, List.of(), false,
-                    plan.ahead() + " commit" + (plan.ahead() == 1 ? "" : "s") + " of " + plan.branch()
+            return new Result(Outcome.REBASED, plan, backupRef, before, List.of(), false, plan.ahead() == 0
+                    ? plan.branch() + " fast-forwarded to " + plan.baseRef()
+                    : plan.ahead() + " commit" + (plan.ahead() == 1 ? "" : "s") + " of " + plan.branch()
                             + " replayed onto " + plan.baseRef());
         }
         List<String> conflicts = git.conflictedFiles();
@@ -157,6 +169,9 @@ public final class Rebaser {
         if (result.outcome() != Outcome.REBASED) {
             return "nothing to push";
         }
+        if (protection.pushProtected(plan.branch())) {
+            return plan.branch() + " is push-protected (branches.pushProtected); pmm never pushes it";
+        }
         String remote = config.workspace().remote();
         if (plan.upstream() == null || !plan.upstream().equals(remote + "/" + plan.branch()) || plan.upstreamCommit() == null) {
             return plan.branch() + " has no upstream " + remote + "/" + plan.branch() + "; push it with: git push -u "
@@ -166,24 +181,13 @@ public final class Rebaser {
         return null;
     }
 
+    /** Never pushed by pmm (branches.pushProtected). */
     public boolean isProtected(String branch) {
-        return config.rebase().protectedBranches().stream().anyMatch(p -> glob(p).matcher(branch).matches());
+        return protection.pushProtected(branch);
     }
 
-    /** {@code *} matches anything but a slash, {@code **} anything. */
     static Pattern glob(String pattern) {
-        StringBuilder regex = new StringBuilder();
-        for (int i = 0; i < pattern.length(); i++) {
-            char c = pattern.charAt(i);
-            if (c == '*') {
-                boolean twice = i + 1 < pattern.length() && pattern.charAt(i + 1) == '*';
-                regex.append(twice ? ".*" : "[^/]*");
-                i += twice ? 1 : 0;
-            } else {
-                regex.append(Pattern.quote(String.valueOf(c)));
-            }
-        }
-        return Pattern.compile(regex.toString());
+        return BranchProtection.glob(pattern);
     }
 
     private static String lastLines(ProcessResult result) {

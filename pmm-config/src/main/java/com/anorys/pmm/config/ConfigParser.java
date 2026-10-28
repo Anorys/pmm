@@ -1,11 +1,14 @@
 package com.anorys.pmm.config;
 
+import com.anorys.pmm.config.PmmConfig.BranchesConfig;
 import com.anorys.pmm.config.PmmConfig.BuildConfig;
 import com.anorys.pmm.config.PmmConfig.MavenConfig;
 import com.anorys.pmm.config.PmmConfig.NexusConfig;
 import com.anorys.pmm.config.PmmConfig.PushPolicy;
 import com.anorys.pmm.config.PmmConfig.RebaseConfig;
 import com.anorys.pmm.config.PmmConfig.RepositoryConfig;
+import com.anorys.pmm.config.PmmConfig.StashMode;
+import com.anorys.pmm.config.PmmConfig.UpdateStrategy;
 import com.anorys.pmm.config.PmmConfig.WorkspaceConfig;
 import com.anorys.pmm.core.Platform;
 import com.anorys.pmm.core.Severity;
@@ -48,14 +51,16 @@ final class ConfigParser {
         NexusConfig nexus = nexus(root.section("nexus"));
         List<String> internalGroups = root.stringList("internalGroups", List.of());
         Map<String, CheckSetting> checks = checks(root.section("checks"));
-        RebaseConfig rebase = rebase(root.section("rebase"));
+        Section rebaseSection = root.section("rebase");
+        BranchesConfig branches = branches(root.section("branches"), rebaseSection);
+        RebaseConfig rebase = rebase(rebaseSection, branches);
         BuildConfig build = build(root.section("build"));
         root.rejectUnknownKeys();
 
         if (!problems.isEmpty()) {
             throw new ConfigException(configFile, problems);
         }
-        return new PmmConfig(configFile, workspace, repositories, maven, nexus, internalGroups, checks, rebase, build);
+        return new PmmConfig(configFile, workspace, repositories, maven, nexus, internalGroups, checks, rebase, branches, build);
     }
 
     private WorkspaceConfig workspace(Section s) {
@@ -190,7 +195,7 @@ final class ConfigParser {
         return severity;
     }
 
-    private RebaseConfig rebase(Section s) {
+    private RebaseConfig rebase(Section s, BranchesConfig branches) {
         boolean requireCleanTree = s.bool("requireCleanTree", true);
         boolean autostash = s.bool("autostash", false);
         boolean backupRefs = s.bool("backupRefs", true);
@@ -203,9 +208,40 @@ final class ConfigParser {
                 s.problem("push", "must be one of never, ask, always");
             }
         }
-        List<String> protectedBranches = s.stringList("protectedBranches", DEFAULT_PROTECTED_BRANCHES);
         s.rejectUnknownKeys();
-        return new RebaseConfig(requireCleanTree, autostash, backupRefs, push, protectedBranches);
+        return new RebaseConfig(requireCleanTree, autostash, backupRefs, push, branches.pushProtected());
+    }
+
+    /** Reads {@code branches:}; {@code rebase.protectedBranches}, its older spelling, still sets {@code pushProtected}. */
+    private BranchesConfig branches(Section s, Section rebase) {
+        List<String> legacy = rebase.stringList("protectedBranches", null);
+        if (legacy != null && s.has("pushProtected")) {
+            rebase.problem("protectedBranches", "is the older name of branches.pushProtected; keep only branches.pushProtected");
+        }
+        List<String> pushProtected = s.stringList("pushProtected", legacy != null ? legacy : DEFAULT_PROTECTED_BRANCHES);
+        List<String> updateProtected = s.stringList("updateProtected", List.of());
+        Map<String, UpdateStrategy> strategies = new LinkedHashMap<>();
+        Section strategySection = s.section("strategies");
+        for (Map.Entry<String, JsonNode> entry : strategySection.entries()) {
+            JsonNode value = entry.getValue();
+            UpdateStrategy strategy = value == null || !value.isValueNode() ? null : UpdateStrategy.parse(value.asText().trim());
+            if (strategy == null) {
+                strategySection.problem(entry.getKey(), "must be one of " + UpdateStrategy.ids());
+            } else {
+                strategies.put(entry.getKey(), strategy);
+            }
+        }
+        StashMode stash = StashMode.ASK;
+        String stashText = s.string("stashOnSwitch", null);
+        if (stashText != null) {
+            try {
+                stash = StashMode.valueOf(stashText.toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                s.problem("stashOnSwitch", "must be one of ask, park, carry, never");
+            }
+        }
+        s.rejectUnknownKeys();
+        return new BranchesConfig(pushProtected, updateProtected, strategies, stash);
     }
 
     private BuildConfig build(Section s) {

@@ -8,13 +8,16 @@ import com.anorys.pmm.build.BuildRunner;
 import com.anorys.pmm.build.MavenCommand;
 import com.anorys.pmm.config.PmmConfig;
 import com.anorys.pmm.config.PmmConfig.RepositoryConfig;
+import com.anorys.pmm.config.PmmConfig.StashMode;
+import com.anorys.pmm.config.PmmConfig.UpdateStrategy;
 import com.anorys.pmm.core.check.Finding;
 import com.anorys.pmm.core.process.ExecutableResolver;
 import com.anorys.pmm.core.process.ProcessRunner;
 import com.anorys.pmm.core.process.SystemProcessRunner;
 import com.anorys.pmm.core.workspace.Workspace;
 import com.anorys.pmm.git.GitChecks;
-import com.anorys.pmm.git.Rebaser;
+import com.anorys.pmm.git.BranchSwitcher;
+import com.anorys.pmm.git.BranchUpdater;
 import com.anorys.pmm.git.RepositoryStatus;
 import com.anorys.pmm.git.StatusCollector;
 import com.anorys.pmm.git.UnreleasedChanges;
@@ -119,17 +122,18 @@ public final class LiveWorkspace implements WorkspaceService {
     }
 
     @Override
-    public RebasePlan planRebase(String repository) {
-        Rebaser.Plan plan = rebaser().plan(config.repository(repository).orElseThrow(), false, false);
-        return new RebasePlan(repository, plan.branch(), plan.baseRef(), plan.ahead(), plan.behind(),
-                plan.predictedConflicts() == null ? List.of() : plan.predictedConflicts(), plan.refusals(), plan);
+    public List<BranchUpdater.Plan> planUpdate(String repository, boolean autostash) {
+        return updater().plans(config.repository(repository).orElseThrow(), false, autostash);
     }
 
     @Override
-    public RebaseResult rebase(RebasePlan plan) {
-        Rebaser.Result result = rebaser().rebase((Rebaser.Plan) plan.handle(), false, false);
-        RebaseOutcome outcome = RebaseOutcome.valueOf(result.outcome().name());
-        return new RebaseResult(outcome, result.message(), result.backupRef(), result);
+    public BranchUpdater.Result update(BranchUpdater.Plan plan, UpdateStrategy strategy) {
+        return updater().update(plan, strategy);
+    }
+
+    @Override
+    public boolean pushable(BranchUpdater.Result result) {
+        return updater().pushable(result);
     }
 
     @Override
@@ -138,12 +142,26 @@ public final class LiveWorkspace implements WorkspaceService {
     }
 
     @Override
-    public String push(RebaseResult result) {
-        return rebaser().push((Rebaser.Result) result.handle());
+    public String push(BranchUpdater.Result result) {
+        return updater().push(result);
     }
 
-    private Rebaser rebaser() {
-        return new Rebaser(config, runner, Clock.systemDefaultZone());
+    @Override
+    public List<BranchSwitcher.Branch> branches(String repository) {
+        return switcher().branches(config.repository(repository).orElseThrow());
+    }
+
+    @Override
+    public BranchSwitcher.Result switchBranch(String repository, String branch, StashMode mode, boolean create) {
+        return switcher().switchTo(config.repository(repository).orElseThrow(), branch, mode, true, create);
+    }
+
+    private BranchUpdater updater() {
+        return new BranchUpdater(config, runner, Clock.systemDefaultZone());
+    }
+
+    private BranchSwitcher switcher() {
+        return new BranchSwitcher(config, runner);
     }
 
     private Workspace workspace() {

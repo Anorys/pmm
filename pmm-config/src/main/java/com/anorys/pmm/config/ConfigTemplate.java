@@ -83,7 +83,12 @@ public final class ConfigTemplate {
                   git.behind: { severity: warn, maxCommits: 20, maxDays: 7 }
 
                 rebase:
-                  push: ask               # never, ask, always (force-with-lease, never on protected branches)
+                  push: ask               # never, ask, always (force-with-lease, never on push-protected branches)
+
+                branches:
+                  pushProtected: [develop, main, master, "release/*"]   # never pushed; still updated locally
+                  updateProtected: []     # never changed locally
+                  stashOnSwitch: ask      # ask, park, carry, never
 
                 build:
                   parallelRepos: 0        # 0 = automatic: min(4, cores / 2)

@@ -4,6 +4,7 @@ import com.anorys.pmm.cli.render.Table;
 import com.anorys.pmm.config.PmmConfig;
 import com.anorys.pmm.config.PmmConfig.RepositoryConfig;
 import com.anorys.pmm.core.process.SystemProcessRunner;
+import com.anorys.pmm.git.BranchProtection;
 import com.anorys.pmm.git.GitClient;
 import com.anorys.pmm.git.GitClient.Operation;
 import com.anorys.pmm.git.GitException;
@@ -53,6 +54,7 @@ public class SyncCommand implements Callable<Integer> {
         List<RepositoryConfig> selected = Selection.repositories(spec, config, repositories);
         SystemProcessRunner runner = new SystemProcessRunner();
         Rebaser rebaser = new Rebaser(config, runner, Clock.systemDefaultZone());
+        BranchProtection protection = new BranchProtection(config);
 
         List<RepositoryStatus> statuses = new StatusCollector(runner).collect(config, selected, !noFetch);
         Table table = new Table("REPO", "BRANCH", "BASE", "AHEAD", "BEHIND", "NEXT STEP").numeric(3, 4);
@@ -74,8 +76,13 @@ public class SyncCommand implements Callable<Integer> {
                     failed |= !done.equals("fast-forwarded");
                     step = done;
                 }
-            } else if (status.tree().detached() || rebaser.isProtected(branch)) {
-                step = "diverged; " + branch + " is protected, merge or reset it by hand";
+            } else if (status.tree().detached()) {
+                step = "diverged; check out a branch first";
+            } else if (protection.updateProtected(branch)) {
+                step = "diverged; " + branch + " is update-protected, update it by hand";
+            } else if (rebaser.isProtected(branch) && !status.baseRef().equals(status.tree().upstream())) {
+                step = "diverged; " + branch + " is push-protected, merge rather than rebase";
+                commands.add("pmm update " + status.name() + " --from base --strategy merge");
             } else {
                 step = prediction(status);
                 commands.add("pmm rebase " + status.name());
@@ -86,7 +93,7 @@ public class SyncCommand implements Callable<Integer> {
         out.print(table.render());
         if (!commands.isEmpty()) {
             out.println();
-            out.println("To rebase:");
+            out.println("To catch up:");
             commands.forEach(c -> out.println("  " + c));
         }
         if (!fastForward && statuses.stream().anyMatch(RepositoryStatus::canFastForward)) {

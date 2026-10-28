@@ -98,6 +98,39 @@ Fetches, then says for each repository whether its branch is up to date, can be 
 needs a rebase, and which files a rebase would conflict on. `--fast-forward` fast-forwards the branches
 that have no commit of their own and a clean working tree.
 
+## pmm update
+
+```text
+pmm update [<repo>...] [--strategy <s>] [--from upstream|base] [--dry-run] [--no-fetch] [--autostash] [--yes] [--[no-]push]
+```
+
+Brings the commits of the upstream, or of the base branch, into the current branch of each repository
+(all monitored ones when none is named). See [Branches, updates and switching](../../guides/rebasing/).
+
+| Option | Effect |
+|---|---|
+| `-s`, `--strategy` | `ff`, `merge`, `rebase`, `reset-soft`, `reset-mixed` or `reset-hard`; default: `branches.strategies` |
+| `--from` | `upstream` (default) or `base` |
+| `--dry-run` | Show what every strategy would do, or why it is refused |
+| `--no-fetch` | Use the last fetched state |
+| `--autostash` | Stash uncommitted changes around a fast-forward, merge or rebase |
+| `-y`, `--yes` | Do not ask before a hard reset that drops commits or changes |
+| `--push`, `--no-push` | Push a rewritten branch with `--force-with-lease`; override `rebase.push` |
+
+## pmm switch
+
+```text
+pmm switch [<branch>] [--repo <name>]... [--stash park|carry|never] [--create] [--no-restore]
+```
+
+Switches every repository that has the branch (or those of `--repo`); without a branch, lists them.
+
+| Option | Effect |
+|---|---|
+| `--stash` | Uncommitted changes: `park` them with the branch left, `carry` them along, or `never` switch; default: `branches.stashOnSwitch` |
+| `--create` | Create the branch from the base branch where it does not exist |
+| `--no-restore` | Leave the changes parked with the branch in the stash |
+
 ## pmm rebase
 
 ```text
@@ -106,7 +139,7 @@ pmm rebase <repo>... [--dry-run] [--no-fetch] [--autostash] [--keep-conflicts] [
 
 Rebases the current branch of each repository onto its base branch, safely, then pushes it with
 `--force-with-lease` if `rebase.push` or `--push` says so. See
-[Branches and rebasing](../../guides/rebasing/).
+[Branches, updates and switching](../../guides/rebasing/).
 
 | Option | Effect |
 |---|---|

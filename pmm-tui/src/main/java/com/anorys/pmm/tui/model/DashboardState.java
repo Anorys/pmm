@@ -55,6 +55,7 @@ public final class DashboardState {
     private Instant depsCheckedAt;
     private Toast toast;
     private Dialog dialog;
+    private Menu menu;
     private boolean help;
     private long tick;
 
@@ -158,6 +159,14 @@ public final class DashboardState {
 
     public void dialog(Dialog dialog) {
         this.dialog = dialog;
+    }
+
+    public Menu menu() {
+        return menu;
+    }
+
+    public void menu(Menu menu) {
+        this.menu = menu;
     }
 
     public boolean help() {

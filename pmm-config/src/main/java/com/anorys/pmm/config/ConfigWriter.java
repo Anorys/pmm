@@ -79,7 +79,13 @@ public final class ConfigWriter {
         rebase.put("autostash", config.rebase().autostash());
         rebase.put("backupRefs", config.rebase().backupRefs());
         rebase.put("push", config.rebase().push().name().toLowerCase(Locale.ROOT));
-        strings(rebase.putArray("protectedBranches"), config.rebase().protectedBranches());
+
+        ObjectNode branches = root.putObject("branches");
+        strings(branches.putArray("pushProtected"), config.branches().pushProtected());
+        strings(branches.putArray("updateProtected"), config.branches().updateProtected());
+        ObjectNode strategies = branches.putObject("strategies");
+        config.branches().strategies().forEach((glob, strategy) -> strategies.put(glob, strategy.id()));
+        branches.put("stashOnSwitch", config.branches().stashOnSwitch().name().toLowerCase(Locale.ROOT));
 
         ObjectNode build = root.putObject("build");
         build.put("parallelRepos", config.build().parallelRepos());
